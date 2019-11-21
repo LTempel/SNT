@@ -239,7 +239,7 @@ public class SciViewSNT {
 
 	private Node add(final Tree tree, final String label, float scaleFactor) {
 		final ShapeTree shapeTree = new ShapeTree(tree, scaleFactor);
-		shapeTree.setName(label);
+		shapeTree.get().setName(label);
 		plottedTrees.put(label, shapeTree);
 		return sciView.addNode(shapeTree.get(), true);
 //		for( Node node : shapeTree.get().getChildren() ) {
@@ -277,17 +277,17 @@ public class SciViewSNT {
 			removeTree(PATH_MANAGER_TREE_LABEL);
 		}
 		add(tree, PATH_MANAGER_TREE_LABEL);
-		sciView.centerOnNode(plottedTrees.get(PATH_MANAGER_TREE_LABEL));
+		sciView.centerOnNode(plottedTrees.get(PATH_MANAGER_TREE_LABEL).treeNode);
 		// sciView.getCamera().setPosition(treeCenter.minus(new GLVector(0,0,-10f)));
 		// sciView.centerOnNode(sciView.getSceneNodes()[(int)(Math.random()*sciView.getSceneNodes().length)]);
 		return true;
 	}
 
 	private void removeTree(final String label) {
-		final Node treeToRemove = plottedTrees.get(label);
+		final Node treeToRemove = plottedTrees.get(label).treeNode;
 		if (treeToRemove != null && sciView != null) {
 			for (final Node node : treeToRemove.getChildren()) {
-				plottedTrees.get(label).removeChild(node);
+				plottedTrees.get(label).treeNode.removeChild(node);
 				sciView.deleteNode(node, false);
 			}
 			sciView.deleteNode(treeToRemove);
@@ -317,7 +317,7 @@ public class SciViewSNT {
 		}
 	}
 
-	private class ShapeTree extends Node {
+	private class ShapeTree {
 
 		private static final long serialVersionUID = 1L;
 		private static final float DEF_NODE_RADIUS = 3f;
@@ -327,9 +327,12 @@ public class SciViewSNT {
 		private Node somaSubShape;
 		private Vector3 translationReset;
 
+		private Node treeNode;
+
 		public ShapeTree(final Tree tree) {
 			super();
 			this.tree = tree;
+			this.treeNode = new Sphere(0.001f,2);
 			translationReset = new FloatVector3(0f,0f,0f);
 			scaleFactor = 0.1f;
 		}
@@ -337,13 +340,15 @@ public class SciViewSNT {
 		public ShapeTree(final Tree tree, final float scaleFactor) {
 			super();
 			this.tree = tree;
+			this.treeNode = new Sphere(0.001f,2);
 			this.scaleFactor = scaleFactor;
 			translationReset = new FloatVector3(0f,0f,0f);
 		}
 
 		public Node get() {
-			if (getChildren().size() == 0) assembleShape();
-			return this;
+			if (this.treeNode.getChildren().size() == 0)
+				this.treeNode = assembleShape();
+			return this.treeNode;
 		}
 
 		private void translateTo(final Vector3 destination) {
@@ -356,7 +361,7 @@ public class SciViewSNT {
 			translationReset = new FloatVector3(0f, 0f, 0f);
 		}
 
-		private void assembleShape() {
+		private Node assembleShape() {
 
 			final List<Node> lines = new ArrayList<>();
 			final List<PointInImage> somaPoints = new ArrayList<>();
@@ -406,14 +411,15 @@ public class SciViewSNT {
 			// Group all lines
 			if (!lines.isEmpty()) {
 				for( final Node line : lines ) {
-					addChild( line );
+					this.treeNode.addChild( line );
 					//sciView.addNode(line, false);
 				}
 			}
 			assembleSoma(somaPoints, somaColors);
-			if (somaSubShape != null) addChild(somaSubShape);
+			if (somaSubShape != null) this.treeNode.addChild(somaSubShape);
 
-			this.setPosition(this.getMaximumBoundingBox().getBoundingSphere().getOrigin());
+			this.treeNode.setPosition(this.treeNode.getMaximumBoundingBox().getBoundingSphere().getOrigin());
+			return this.treeNode;
 			//sciView.setActiveNode(this);
 			//sciView.surroundLighting();
 		}
@@ -440,16 +446,16 @@ public class SciViewSNT {
 				final Vector3 p3 = convertPIIToVector3(somaPoints.get(2));
 				final double lenthT1 = p2.minus(p1).getLength();
 				final double lenthT2 = p1.minus(p3).getLength();
-				// TODO these should be children
+				// TODO these should be created differently
 				final Node t1 = sciView.addCylinder(p2,DEF_NODE_RADIUS,(float)lenthT1,20);
 				final Node t2 = sciView.addCylinder(p1,DEF_NODE_RADIUS,(float)lenthT2,20);
-				addChild(t1);
-				addChild(t2);
+				this.treeNode.addChild(t1);
+				this.treeNode.addChild(t2);
 				return;
 			default:
 				// just create a centroid sphere
 				final PointInImage cCenter = SNTPoint.average(somaPoints);
-				// TODO these should be children
+				// TODO these should be created differently
 				somaSubShape = sciView.addSphere(convertPIIToVector3(cCenter), DEF_NODE_RADIUS, col);
 				return;
 			}
@@ -470,9 +476,9 @@ public class SciViewSNT {
 		 * In case a bounding box cannot be determined, the function will return null.
 		 */
 		public OrientedBoundingBox generateBoundingBox() {
-			OrientedBoundingBox bb = new OrientedBoundingBox(this, 0.0f, 0.0f, 0.0f,
+			OrientedBoundingBox bb = new OrientedBoundingBox(this.treeNode, 0.0f, 0.0f, 0.0f,
 					0.0f, 0.0f, 0.0f);
-			for( final Node n : getChildren() ) {
+			for( final Node n : this.treeNode.getChildren() ) {
 				final OrientedBoundingBox cBB = n.generateBoundingBox();
 				if( cBB != null )
 					bb = bb.expand(bb, cBB);
@@ -496,18 +502,22 @@ public class SciViewSNT {
 
 		String basePath = "/groups/cardona/home/harringtonk/SNT/";
 
-		String ch1Path = basePath + "/SNT/C1-MLIGHTR_R1_3X2-cropped.tif";
-		String ch2Path = basePath + "/SNT/C2-MLIGHTR_R1_3X2-cropped.tif";
-		String ch3Path = basePath + "/SNT/C3-MLIGHTR_R1_3X2-cropped.tif";
-		String swcPath = basePath + "/SNT/MLIGHTR_R1_3X2-cropped-000.swc";
+//		String ch1Path = basePath + "/SNT/C1-MLIGHTR_R1_3X2-cropped.tif";
+//		String ch2Path = basePath + "/SNT/C2-MLIGHTR_R1_3X2-cropped.tif";
+//		String ch3Path = basePath + "/SNT/C3-MLIGHTR_R1_3X2-cropped.tif";
+//		String swcPath = basePath + "/SNT/MLIGHTR_R1_3X2-cropped-000.swc";
+
+		String ch1Path = basePath + "/SNT/OP_1.tif";
+		String swcPath = basePath + "/SNT/OP_1.swc";
 
 		Dataset ch1 = (Dataset) ioService.open(ch1Path);
-		Dataset ch2 = (Dataset) ioService.open(ch2Path);
-		Dataset ch3 = (Dataset) ioService.open(ch3Path);
+//		Dataset ch2 = (Dataset) ioService.open(ch2Path);
+//		Dataset ch3 = (Dataset) ioService.open(ch3Path);
 
 		float[] voxelResolution = new float[]{0.2285199f, 0.2285199f, 0.4188450f};
 
-		IterableInterval ch1View = Views.invertAxis(ch1, 1);
+		//IterableInterval ch1View = Views.invertAxis(ch1, 1);
+		IterableInterval ch1View = Views.invertAxis(Views.invertAxis(ch1, 1), 1);
 
 		Volume v1 = (Volume) sciView.addVolume(ch1View, "ch1", voxelResolution);
 
@@ -552,7 +562,7 @@ public class SciViewSNT {
 		//tree.scale(0.2285199f, 0.2285199f, 0.4188450f);
 
 		//#sntService.loadTracings(swc_path)
-		Node treeNode = sciViewSNT.addTree(tree, 0.5f);
+		Node treeNode = sciViewSNT.addTree(tree, 0.1f);
 
 		treeNode.setPosition(volumeSize.times(-0.5f*v1.getPixelToWorldRatio()));
 		treeNode.setNeedsUpdate(true);
