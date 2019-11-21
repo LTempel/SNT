@@ -24,10 +24,13 @@ package sc.fiji.snt;
 
 import cleargl.GLVector;
 import graphics.scenery.*;
+import graphics.scenery.volumes.Volume;
+import net.imagej.Dataset;
 import net.imagej.ImageJ;
 
 import org.scijava.Context;
 import org.scijava.NullContextException;
+import org.scijava.io.IOService;
 import org.scijava.plugin.Parameter;
 import org.scijava.util.ColorRGB;
 import org.scijava.util.Colors;
@@ -44,6 +47,7 @@ import sc.iview.vector.Vector3;
 import java.awt.Color;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
+import java.io.IOException;
 import java.util.List;
 
 import javax.swing.SwingUtilities;
@@ -187,6 +191,13 @@ public class SciViewSNT {
 		//sciView.centerOnNode(plottedTrees.get(label));
 	}
 
+	public void addTree(final Tree tree, final float scaleFactor) {
+		initSciView();
+		final String label = getUniqueLabel(plottedTrees, "Tree ", tree.getLabel());
+		add(tree, label, scaleFactor);
+		//sciView.centerOnNode(plottedTrees.get(label));
+	}
+
 	/**
 	 * Gets the specified Tree as a Scenery Node.
 	 *
@@ -215,7 +226,12 @@ public class SciViewSNT {
 	}
 
 	private void add(final Tree tree, final String label) {
-		final ShapeTree shapeTree = new ShapeTree(tree);
+		float scaleFactor = 0.1f;
+		add(tree, label, scaleFactor);
+	}
+
+	private void add(final Tree tree, final String label, float scaleFactor) {
+		final ShapeTree shapeTree = new ShapeTree(tree, scaleFactor);
 		shapeTree.setName(label);
 		plottedTrees.put(label, shapeTree);
 		sciView.addNode(shapeTree.get(), true);
@@ -300,12 +316,21 @@ public class SciViewSNT {
 		private static final float DEF_NODE_RADIUS = 3f;
 
 		private final Tree tree;
+		private final float scaleFactor;
 		private Node somaSubShape;
 		private Vector3 translationReset;
 
 		public ShapeTree(final Tree tree) {
 			super();
 			this.tree = tree;
+			translationReset = new FloatVector3(0f,0f,0f);
+			scaleFactor = 0.1f;
+		}
+
+		public ShapeTree(final Tree tree, final float scaleFactor) {
+			super();
+			this.tree = tree;
+			this.scaleFactor = scaleFactor;
 			translationReset = new FloatVector3(0f,0f,0f);
 		}
 
@@ -351,7 +376,6 @@ public class SciViewSNT {
 				// Assemble arbor(s)
 				final List<Vector3> points = new ArrayList<>();
 				final List<ColorRGB> colors = new ArrayList<>();
-				final float scaleFactor = 1f;
 				for (int i = 0; i < p.size(); ++i) {
 					final PointInImage pim = p.getNodeWithoutChecks(i);
 					final ClearGLVector3 coord = new ClearGLVector3((float)pim.x, (float)pim.y, (float)pim.z);
@@ -449,21 +473,52 @@ public class SciViewSNT {
 	}
 
 	/* IDE debug method */
-	public static void main(final String[] args) throws InterruptedException {
+	public static void main(final String[] args) throws InterruptedException, IOException {
 		SceneryBase.xinitThreads();
 		//GuiUtils.setSystemLookAndFeel();
 		final ImageJ ij = new ImageJ();
 		ij.ui().showUI();
 		final SNTService sntService = ij.context().getService(SNTService.class);
 		final SciViewSNT sciViewSNT = sntService.getOrCreateSciViewSNT();
-		final Tree tree = sntService.demoTree();
-		tree.setColor(Colors.RED);
-//		final Tree tree2 = Tree.fromFile("/home/tferr/code/OP_1/OP_1.swc");
-//		tree2.setColor(Colors.YELLOW);
-//		sciViewSNT.addTree(tree2);
-		//sciViewSNT.getSciView().centerOnScene();
-		sciViewSNT.addTree(tree);
-		//sciViewSNT.getSciView().addVolume(sntService.demoTreeDataset());
-//		sciViewSNT.getSciView().centerOnNode(sciViewSNT.getTreeAsSceneryNode(tree2));
+		SciView sciView = sciViewSNT.getSciView();
+
+		IOService ioService = ij.context().getService(IOService.class);
+
+		String basePath = "/groups/cardona/home/harringtonk/SNT/";
+
+		String ch1Path = basePath + "/SNT/C1-MLIGHTR_R1_3X2-cropped.tif";
+		String ch2Path = basePath + "/SNT/C2-MLIGHTR_R1_3X2-cropped.tif";
+		String ch3Path = basePath + "/SNT/C3-MLIGHTR_R1_3X2-cropped.tif";
+		String swcPath = basePath + "/SNT/MLIGHTR_R1_3X2-cropped-000.swc";
+
+		Dataset ch1 = (Dataset) ioService.open(ch1Path);
+		Dataset ch2 = (Dataset) ioService.open(ch2Path);
+		Dataset ch3 = (Dataset) ioService.open(ch3Path);
+
+		float[] voxelResolution = new float[]{0.2285199f, 0.2285199f, 0.4188450f};
+
+		Volume v1 = (Volume) sciView.addVolume(ch1, voxelResolution);
+
+		v1.setPixelToWorldRatio(0.1f);
+		//v2 = sciView.addVolume(ch2, voxel_resolution)
+		//# v3 = sciView.addVolume(ch3, voxel_resolution)
+
+		//v1.getRotation().rotateByAngleY(3.1415)
+
+		v1.setName("Ch1");
+//		# v2.setName('Ch2')
+//		# v3.setName('Ch3')
+
+		sciView.setColormap(v1, "Red.lut");
+//		# sciView.setColormap(v2, "Green.lut")
+//		# sciView.setColormap(v3, "Blue.lut")
+
+		Tree tree = new Tree(swcPath);
+
+		//#sntService.loadTracings(swc_path)
+		sciViewSNT.addTree(tree, 0.1f);
+
+		//treeName = "MLIGHTR_R1_3X2-cropped-000.swc";
+
 	}
 }
