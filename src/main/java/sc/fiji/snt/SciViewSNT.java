@@ -562,7 +562,7 @@ public class SciViewSNT {
 		//tree.scale(0.2285199f, 0.2285199f, 0.4188450f);
 
 		//#sntService.loadTracings(swc_path)
-		Node treeNode = sciViewSNT.addTree(tree, 0.1f);
+		Node treeNode = sciViewSNT.addTree(tree, v1.getPixelToWorldRatio());
 
 		treeNode.setPosition(volumeSize.times(-0.5f*v1.getPixelToWorldRatio()));
 		treeNode.setNeedsUpdate(true);
