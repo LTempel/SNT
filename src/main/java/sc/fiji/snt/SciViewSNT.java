@@ -23,11 +23,17 @@
 package sc.fiji.snt;
 
 import cleargl.GLVector;
+import com.jogamp.opengl.math.Quaternion;
 import graphics.scenery.*;
 import graphics.scenery.volumes.Volume;
 import net.imagej.Dataset;
 import net.imagej.ImageJ;
 
+import net.imagej.ops.OpService;
+import net.imglib2.IterableInterval;
+import net.imglib2.type.numeric.RealType;
+import net.imglib2.view.IntervalView;
+import net.imglib2.view.Views;
 import org.scijava.Context;
 import org.scijava.NullContextException;
 import org.scijava.io.IOService;
@@ -482,6 +488,7 @@ public class SciViewSNT {
 		final SciViewSNT sciViewSNT = sntService.getOrCreateSciViewSNT();
 		SciView sciView = sciViewSNT.getSciView();
 
+		OpService ops = ij.context().getService(OpService.class);
 		IOService ioService = ij.context().getService(IOService.class);
 
 		String basePath = "/groups/cardona/home/harringtonk/SNT/";
@@ -497,7 +504,11 @@ public class SciViewSNT {
 
 		float[] voxelResolution = new float[]{0.2285199f, 0.2285199f, 0.4188450f};
 
-		Volume v1 = (Volume) sciView.addVolume(ch1, voxelResolution);
+		IterableInterval ch1View = Views.invertAxis(ch1, 1);
+
+		Volume v1 = (Volume) sciView.addVolume(ch1View, "ch1", voxelResolution);
+
+		//v1.setRotation(new Quaternion().rotateByAngleY((float) Math.PI));
 
 		v1.setPixelToWorldRatio(0.1f);
 		//v2 = sciView.addVolume(ch2, voxel_resolution)
@@ -509,11 +520,33 @@ public class SciViewSNT {
 //		# v2.setName('Ch2')
 //		# v3.setName('Ch3')
 
+		GLVector volumeSize = new GLVector(v1.getSizeX() * v1.getVoxelSizeX(), v1.getSizeY() * v1.getVoxelSizeY(), v1.getSizeZ() * v1.getVoxelSizeZ());
+
+		//v1.setPosition(volumeSize.times(0.5f));
+
 		sciView.setColormap(v1, "Red.lut");
 //		# sciView.setColormap(v2, "Green.lut")
 //		# sciView.setColormap(v3, "Blue.lut")
 
+//		GLVector[] tetrahedron = new GLVector[4];
+//        tetrahedron[0] = new GLVector( 1.0f, 0f, -1.0f/(float)Math.sqrt(2.0f) );
+//        tetrahedron[1] = new GLVector( -1.0f,0f,-1.0f/(float)Math.sqrt(2.0) );
+//        tetrahedron[2] = new GLVector( 0.0f,1.0f,1.0f/(float)Math.sqrt(2.0) );
+//        tetrahedron[3] = new GLVector( 0.0f,-1.0f,1.0f/(float)Math.sqrt(2.0) );
+//
+//		List<Node> lights = sciView.findNodes(node -> node instanceof PointLight);
+//
+//        for( int i = 0; i < 4; i++ ) {// TODO allow # initial lights to be customizable?
+//			PointLight light = (PointLight) lights.get(i);
+//			light.setLightRadius(1000f);
+//            light.setPosition( tetrahedron[i].times(100.0f).plus(v1.getPosition()) );
+//            light.setEmissionColor( new GLVector( 1.0f, 1.0f, 1.0f ) );
+//            light.setIntensity( 1.0f );
+//        }
+
 		Tree tree = new Tree(swcPath);
+
+		//tree.scale(0.2285199f, 0.2285199f, 0.4188450f);
 
 		//#sntService.loadTracings(swc_path)
 		sciViewSNT.addTree(tree, 0.1f);
