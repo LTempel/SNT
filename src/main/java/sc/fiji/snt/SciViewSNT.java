@@ -59,6 +59,7 @@ import java.util.List;
 import javax.swing.SwingUtilities;
 
 import java.util.*;
+import java.util.function.Consumer;
 
 /**
  * Bridges SNT to {@link SciView}, allowing {@link Tree}s to be rendered as Scenery objects
@@ -190,17 +191,17 @@ public class SciViewSNT {
 	 * @see Tree#getLabel()
 	 * @see Tree#setColor(ColorRGB)
 	 */
-	public void addTree(final Tree tree) {
+	public Node addTree(final Tree tree) {
 		initSciView();
 		final String label = getUniqueLabel(plottedTrees, "Tree ", tree.getLabel());
-		add(tree, label);
+		return add(tree, label);
 		//sciView.centerOnNode(plottedTrees.get(label));
 	}
 
-	public void addTree(final Tree tree, final float scaleFactor) {
+	public Node addTree(final Tree tree, final float scaleFactor) {
 		initSciView();
 		final String label = getUniqueLabel(plottedTrees, "Tree ", tree.getLabel());
-		add(tree, label, scaleFactor);
+		return add(tree, label, scaleFactor);
 		//sciView.centerOnNode(plottedTrees.get(label));
 	}
 
@@ -231,16 +232,16 @@ public class SciViewSNT {
 		return  plottedTrees.containsKey(treeLabel);
 	}
 
-	private void add(final Tree tree, final String label) {
+	private Node add(final Tree tree, final String label) {
 		float scaleFactor = 0.1f;
-		add(tree, label, scaleFactor);
+		return add(tree, label, scaleFactor);
 	}
 
-	private void add(final Tree tree, final String label, float scaleFactor) {
+	private Node add(final Tree tree, final String label, float scaleFactor) {
 		final ShapeTree shapeTree = new ShapeTree(tree, scaleFactor);
 		shapeTree.setName(label);
 		plottedTrees.put(label, shapeTree);
-		sciView.addNode(shapeTree.get(), true);
+		return sciView.addNode(shapeTree.get(), true);
 //		for( Node node : shapeTree.get().getChildren() ) {
 //			sciView.addChild(node);
 //			//System.out.println("addTree: node " + node.getMetadata().get("pathID") + " node " + n);
@@ -439,6 +440,7 @@ public class SciViewSNT {
 				final Vector3 p3 = convertPIIToVector3(somaPoints.get(2));
 				final double lenthT1 = p2.minus(p1).getLength();
 				final double lenthT2 = p1.minus(p3).getLength();
+				// TODO these should be children
 				final Node t1 = sciView.addCylinder(p2,DEF_NODE_RADIUS,(float)lenthT1,20);
 				final Node t2 = sciView.addCylinder(p1,DEF_NODE_RADIUS,(float)lenthT2,20);
 				addChild(t1);
@@ -447,6 +449,7 @@ public class SciViewSNT {
 			default:
 				// just create a centroid sphere
 				final PointInImage cCenter = SNTPoint.average(somaPoints);
+				// TODO these should be children
 				somaSubShape = sciView.addSphere(convertPIIToVector3(cCenter), DEF_NODE_RADIUS, col);
 				return;
 			}
@@ -549,7 +552,13 @@ public class SciViewSNT {
 		//tree.scale(0.2285199f, 0.2285199f, 0.4188450f);
 
 		//#sntService.loadTracings(swc_path)
-		sciViewSNT.addTree(tree, 0.1f);
+		Node treeNode = sciViewSNT.addTree(tree, 0.5f);
+
+		treeNode.setPosition(volumeSize.times(-0.5f*v1.getPixelToWorldRatio()));
+		treeNode.setNeedsUpdate(true);
+		treeNode.setNeedsUpdateWorld(true);
+
+		treeNode.runRecursive((Consumer<Node>) node -> node.setNeedsUpdateWorld(true));
 
 		//treeName = "MLIGHTR_R1_3X2-cropped-000.swc";
 
