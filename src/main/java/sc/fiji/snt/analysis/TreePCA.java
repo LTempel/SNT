@@ -858,9 +858,9 @@ public class TreePCA {
         System.out.println("backward algorithm = " + (endTime - startTime) + " milliseconds");
 
         startTime = System.currentTimeMillis();
-        getMedianTree();
+        Tree med = getMedianTree();
         endTime = System.currentTimeMillis();
-        System.out.println("median tree = " + (endTime - startTime) + " milliseconds");
+        System.out.println("median tree (" + med.getLabel() + ") " + " = " + (endTime - startTime) + " milliseconds");
     }
 
     public static void main(String[] args) {
