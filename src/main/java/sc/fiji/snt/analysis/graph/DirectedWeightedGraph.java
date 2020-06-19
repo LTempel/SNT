@@ -66,7 +66,7 @@ public class DirectedWeightedGraph extends DefaultDirectedWeightedGraph<SWCPoint
 		init(tree.getNodesAsSWCPoints(), true);
 	}
 
-	protected DirectedWeightedGraph() {
+	public DirectedWeightedGraph() {
 		super(SWCWeightedEdge.class);
 		this.tree = null;
 	}
