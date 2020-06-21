@@ -143,7 +143,7 @@ public class TreePCA {
                 || backwardPrincipalComponents.size() < numComponents) {
             backwardAlgorithm(numComponents);
         }
-        return backwardPrincipalComponents;
+        return backwardPrincipalComponents.subList(0, numComponents);
     }
 
     public List<KTree> getKTrees() {
@@ -418,7 +418,7 @@ public class TreePCA {
         int pc = 0;
         while (pc < numComponents) {
             //System.out.println(pc);
-            int maxSumWeights = 0;
+            int maxSumWeights = Integer.MIN_VALUE;
             Stack<Node> stack = new Stack<>();
             for (Node child : supportTree.root.children) {
                 child.cumulativeWeight = child.weight + child.parent.cumulativeWeight;
@@ -463,13 +463,6 @@ public class TreePCA {
     }
 
     private void backwardAlgorithm(final int numComponents) {
-        if (allTreeLines == null || allTreeLines.isEmpty()) {
-            buildTreeLines();
-        }
-        if (numComponents > allTreeLines.size() || numComponents < 1) {
-            throw new IllegalArgumentException("numComponents (" + numComponents + ") "
-                    + "must be <= support tree dimension (" + allTreeLines.size() + ")");
-        }
         resetWeights();
 
         @SuppressWarnings("unchecked")
@@ -512,9 +505,7 @@ public class TreePCA {
         }
         int numNodes = 0;
         for (KTree t : kTreeList) {
-            for (Node n : t.indexToNodeMap.values()) {
-                ++numNodes;
-            }
+            numNodes += t.indexToNodeMap.size();
         }
         return numNodes;
     }
@@ -530,8 +521,8 @@ public class TreePCA {
         Set<BigInteger> lastInLine = line.get(line.size() - 1).indexToNodeMap.keySet();
         int explainedNodes = 0;
         for (KTree t : kTreeList) {
-            for (BigInteger index : t.indexToNodeMap.keySet()) {
-                if (lastInLine.contains(index)) {
+            for (BigInteger index : lastInLine) {
+                if (t.indexToNodeMap.containsKey(index)) {
                     ++explainedNodes;
                 }
             }
@@ -596,7 +587,7 @@ public class TreePCA {
         }
 
 //		@Override
-//		private boolean equals(Object obj) {
+//		public boolean equals(Object obj) {
 //			if (this == obj) {
 //				return true;
 //			}
@@ -608,7 +599,7 @@ public class TreePCA {
 //				return false;
 //			}
 //			for (int i = 0; i < this.path.size(); i++) {
-//				if (this.path.get(i).index != other.path.get(i).index) {
+//				if (!this.path.get(i).index.equals(other.path.get(i).index)) {
 //					return false;
 //				}
 //			}
@@ -638,6 +629,10 @@ public class TreePCA {
 
         private Node(BigInteger index) {
             this.index = index;
+        }
+
+        public Node getParent() {
+            return this.parent;
         }
 
         public List<Node> getChildren() {
@@ -865,13 +860,12 @@ public class TreePCA {
 
     public static void main(String[] args) {
         List<Tree> demoTrees = new SNTService().demoTrees();
-
         TreePCA tPCA = new TreePCA(demoTrees);
         tPCA.profile();
-
         int dimension = tPCA.getTotalDimension();
         System.out.println("total dimension = " + dimension);
-
+        System.out.println("Total nodes: " + tPCA.getTotalNumNodes());
+        System.out.println("Support tree size: " + tPCA.getSupportKTree().getNodes().size());
         List<TreeLine> fpcs = tPCA.forwardPrincipalComponents;
         List<TreeLine> bpcs = tPCA.backwardPrincipalComponents;
         boolean allTrue = true;
@@ -883,6 +877,8 @@ public class TreePCA {
         }
         // If allTrue == true, the implementation is likely correct.
         System.out.println("k-th FPC == k-th BPC: " + allTrue);
+        System.out.println("FPC1 explained nodes: " + tPCA.getNumExplainedNodes(fpcs.get(0)));
+        System.out.println("BPC1 explained nodes: " + tPCA.getNumExplainedNodes(bpcs.get(0)));
         KTree inter = tPCA.getIntersectionKTree();
         KTree supp = tPCA.getSupportKTree();
         inter.draw2D();
