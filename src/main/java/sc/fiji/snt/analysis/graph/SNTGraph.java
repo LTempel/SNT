@@ -1,12 +1,13 @@
 package sc.fiji.snt.analysis.graph;
 
 import org.jgrapht.graph.DefaultDirectedWeightedGraph;
+import org.jgrapht.graph.DirectedWeightedPseudograph;
 import org.scijava.util.ColorRGB;
 
 import java.util.HashMap;
 import java.util.Map;
 
-public class SNTGraph<V, DefaultWeightedEdge> extends DefaultDirectedWeightedGraph<V, DefaultWeightedEdge> {
+public class SNTGraph<V, DefaultWeightedEdge> extends DirectedWeightedPseudograph<V, DefaultWeightedEdge> {
 
 	private static final long serialVersionUID = 8458292348918037500L;
 

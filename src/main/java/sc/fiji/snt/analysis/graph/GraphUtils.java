@@ -45,36 +45,36 @@ public class GraphUtils {
 	private GraphUtils() {
 	}
 
-	@Deprecated
-	public static DefaultDirectedGraph<SWCPoint, SWCWeightedEdge> createGraph(final Collection<SWCPoint> nodes,
-	                                                                              final boolean assignDistancesToWeights) {
-		return new DirectedWeightedGraph(nodes, assignDistancesToWeights);
-	}
-
-	@Deprecated
-	public static DefaultDirectedGraph<SWCPoint, SWCWeightedEdge> createGraph(final Tree tree) throws IllegalArgumentException {
-		return tree.getGraph();
-	}
-
-	/**
-	 * Creates a {@link Tree} from a graph.
-	 *
-	 * @param graph the graph to be converted.
-	 * @return the Tree, assembled from from the graph vertices
-	 */
-	@Deprecated
-	public static Tree createTree(final DefaultDirectedGraph<SWCPoint, ?> graph) {
-		if (graph instanceof DirectedWeightedGraph) {
-			return ((DirectedWeightedGraph)graph).getTree();
-		}
-		return new Tree(graph.vertexSet(), "");
-	}
-
-	@Deprecated
-	public static DefaultDirectedGraph<SWCPoint, SWCWeightedEdge> getSimplifiedGraph(
-			final DirectedWeightedGraph graph) {
-		return graph.getSimplifiedGraph();
-	}
+//	@Deprecated
+//	public static DefaultDirectedGraph<SWCPoint, SWCWeightedEdge> createGraph(final Collection<SWCPoint> nodes,
+//	                                                                              final boolean assignDistancesToWeights) {
+//		return new DirectedWeightedGraph(nodes, assignDistancesToWeights);
+//	}
+//
+//	@Deprecated
+//	public static DefaultDirectedGraph<SWCPoint, SWCWeightedEdge> createGraph(final Tree tree) throws IllegalArgumentException {
+//		return tree.getGraph();
+//	}
+//
+//	/**
+//	 * Creates a {@link Tree} from a graph.
+//	 *
+//	 * @param graph the graph to be converted.
+//	 * @return the Tree, assembled from from the graph vertices
+//	 */
+//	@Deprecated
+//	public static Tree createTree(final DefaultDirectedGraph<SWCPoint, ?> graph) {
+//		if (graph instanceof DirectedWeightedGraph) {
+//			return ((DirectedWeightedGraph)graph).getTree();
+//		}
+//		return new Tree(graph.vertexSet(), "");
+//	}
+//
+//	@Deprecated
+//	public static DefaultDirectedGraph<SWCPoint, SWCWeightedEdge> getSimplifiedGraph(
+//			final DirectedWeightedGraph graph) {
+//		return graph.getSimplifiedGraph();
+//	}
 
 	/**
 	 * Displays a graph in SNT's "Dendrogram Viewer" featuring UI commands for
@@ -90,21 +90,21 @@ public class GraphUtils {
 		return graphViewer.show();
 	}
 
-	public static void main(final String[] args) {
-		final ImageJ ij = new ImageJ();
-		SNTUtils.setDebugMode(true);
-		SNTService sntService = ij.context().getService(SNTService.class);
-		final Tree tree = sntService.demoTree();
-		tree.downSample(Double.MAX_VALUE);
-		tree.setColor(Colors.RED);
-		final DirectedWeightedGraph graph = tree.getGraph();
-		final Viewer3D recViewer = new Viewer3D(ij.context());
-		final Tree convertedTree = GraphUtils.createTree(graph);
-		convertedTree.setColor(Colors.CYAN);
-		recViewer.add(tree);
-		recViewer.add(convertedTree);
-		recViewer.show();
-		GraphUtils.show(graph);
-		GraphUtils.show(graph.getSimplifiedGraph());
-	}
+//	public static void main(final String[] args) {
+//		final ImageJ ij = new ImageJ();
+//		SNTUtils.setDebugMode(true);
+//		SNTService sntService = ij.context().getService(SNTService.class);
+//		final Tree tree = sntService.demoTree();
+//		tree.downSample(Double.MAX_VALUE);
+//		tree.setColor(Colors.RED);
+//		final DirectedWeightedGraph graph = tree.getGraph();
+//		final Viewer3D recViewer = new Viewer3D(ij.context());
+//		final Tree convertedTree = GraphUtils.createTree(graph);
+//		convertedTree.setColor(Colors.CYAN);
+//		recViewer.add(tree);
+//		recViewer.add(convertedTree);
+//		recViewer.show();
+//		GraphUtils.show(graph);
+//		GraphUtils.show(graph.getSimplifiedGraph());
+//	}
 }

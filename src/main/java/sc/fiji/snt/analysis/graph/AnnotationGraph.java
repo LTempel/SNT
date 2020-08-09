@@ -32,7 +32,7 @@ public class AnnotationGraph extends SNTGraph<BrainAnnotation, AnnotationWeighte
 	private double threshold;
 	private int maxOntologyDepth;
 
-    protected AnnotationGraph() {
+    public AnnotationGraph() {
         super(AnnotationWeightedEdge.class);
     }
 
