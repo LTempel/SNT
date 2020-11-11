@@ -22,37 +22,24 @@
 
 package sc.fiji.snt;
 
-import java.io.File;
-import java.io.FileFilter;
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-
-import org.apache.commons.math3.stat.descriptive.SummaryStatistics;
-import org.scijava.util.ColorRGB;
-
 import ij.IJ;
 import ij.ImagePlus;
 import ij.ImageStack;
 import ij.measure.Calibration;
+import org.apache.commons.math3.stat.descriptive.SummaryStatistics;
+import org.scijava.util.ColorRGB;
 import sc.fiji.snt.analysis.TreeAnalyzer;
 import sc.fiji.snt.analysis.graph.DirectedWeightedGraph;
 import sc.fiji.snt.hyperpanes.MultiDThreePanes;
 import sc.fiji.snt.io.MouseLightLoader;
-import sc.fiji.snt.util.BoundingBox;
-import sc.fiji.snt.util.PointInCanvas;
-import sc.fiji.snt.util.PointInImage;
-import sc.fiji.snt.util.SNTColor;
-import sc.fiji.snt.util.SWCPoint;
+import sc.fiji.snt.util.*;
 import sc.fiji.snt.viewer.Viewer2D;
 import sc.fiji.snt.viewer.Viewer3D;
+
+import java.io.File;
+import java.io.FileFilter;
+import java.io.IOException;
+import java.util.*;
 
 /**
  * Utility class to access a Collection of Paths (typically a complete
@@ -1528,7 +1515,11 @@ public class Tree {
 	private void initPathAndFillManager() {
 		if (pafm == null) {
 			pafm = new PathAndFillManager();
-			pafm.addTree(this);
+			// FIXME: Since the paths of this tree may be associated with other pafm instances and paths
+			//  are passed to a pafm by reference, make a deep copy of the Tree so that changes to identifying path
+			//  properties (path ID, tree ID, etc) in this instance do not propagate to other
+			//  pafm instances (most importantly, the one used by the plugin instance).
+			pafm.addTree(this.clone2());
 		}
 	}
 
@@ -1538,6 +1529,50 @@ public class Tree {
 		clone.setLabel(getLabel());
 		clone.setBoundingBox(box);
 		for (final Path path : list()) clone.add(path.clone());
+		return clone;
+	}
+
+	public Tree clone2() {
+		// The above clone() method does not set joins correctly
+		final Tree clone = new Tree();
+		final Map<Integer, Path> idToPathMap = new HashMap<>();
+		for (final Path path : list()) {
+			final Path clonePath = path.createPath();
+			idToPathMap.put(clonePath.getID(), clonePath);
+			for (int i = 0; i < path.size(); i++) {
+				final PointInImage n = path.getNode(i);
+				clonePath.addNode(new PointInImage(n.getX(), n.getY(), n.getZ()));
+			}
+			clone.add(clonePath);
+		}
+		for (final Path path : list()) {
+			final Path clonePath = idToPathMap.get(path.getID());
+			if (path.getStartJoins() != null) {
+				final PointInImage startJoinsPoint = path.getStartJoinsPoint();
+				// Path#getNodeIndex() does not work for some reason...
+				final int startJoinsPointIdx = path.indexNearestTo(
+						startJoinsPoint.x,
+						startJoinsPoint.y,
+						startJoinsPoint.z
+				);
+				clonePath.setStartJoin(
+						idToPathMap.get(path.getStartJoins().getID()),
+						clonePath.getNode(startJoinsPointIdx)
+				);
+			}
+			if (path.getEndJoins() != null) {
+				final PointInImage endJoinsPoint = path.getEndJoinsPoint();
+				int endJoinsPointIdx = path.indexNearestTo(
+						endJoinsPoint.x,
+						endJoinsPoint.y,
+						endJoinsPoint.z
+				);
+				clonePath.setEndJoin(
+						idToPathMap.get(path.getEndJoins().getID()),
+						clonePath.getNode(endJoinsPointIdx)
+				);
+			}
+		}
 		return clone;
 	}
 
