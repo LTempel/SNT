@@ -636,24 +636,24 @@ public class PathManagerUI extends JDialog implements PathAndFillListener,
 			final Collection<Path> result = new ArrayList<>();
 			if (ifNoneSelectedGetAll && tree.getSelectionCount() == 0) {
 				for (final Path p : pathAndFillManager.getPaths()) {
-					if (p == null || p.isFittedVersionOfAnotherPath()) continue;
+					if (p == null) continue;
 					// If fitted flavor of path exists use it instead
 					final Path pathToAdd = (p.getUseFitted() && p.getFitted() != null) ? p.getFitted() : p;
 					result.add(pathToAdd);
 				}
-			}
-			final TreePath[] selectedPaths = tree.getSelectionPaths();
-			if (selectedPaths == null || selectedPaths.length == 0) {
-				return result;
-			}
-			for (final TreePath tp : selectedPaths) {
-				final DefaultMutableTreeNode node = (DefaultMutableTreeNode) (tp
-					.getLastPathComponent());
-				if (node != root) {
-					final Path p = (Path) node.getUserObject();
-					// If fitted flavor of path exists use it instead
-					final Path pathToAdd = (p.getUseFitted() && p.getFitted() != null) ? p.getFitted() : p;
-					result.add(pathToAdd);
+			} else {
+				final TreePath[] selectedPaths = tree.getSelectionPaths();
+				if (selectedPaths == null || selectedPaths.length == 0) {
+					return result;
+				}
+				for (final TreePath tp : selectedPaths) {
+					final DefaultMutableTreeNode node = (DefaultMutableTreeNode) (tp.getLastPathComponent());
+					if (node != root) {
+						final Path p = (Path) node.getUserObject();
+						// If fitted flavor of path exists use it instead
+						final Path pathToAdd = (p.getUseFitted() && p.getFitted() != null) ? p.getFitted() : p;
+						result.add(pathToAdd);
+					}
 				}
 			}
 			return result;

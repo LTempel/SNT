@@ -1181,7 +1181,7 @@ public class TreeAnalyzer extends ContextCommand {
 	private double sumLength(final Collection<Path> paths) {
 		return paths.stream().mapToDouble(p -> p.getLength()).sum();
 	}
-	
+
 	/* IDE debug method */
 	public static void main(final String[] args) throws InterruptedException {
 		final ImageJ ij = new ImageJ();

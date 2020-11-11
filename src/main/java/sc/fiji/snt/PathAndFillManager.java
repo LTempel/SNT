@@ -565,7 +565,7 @@ public class PathAndFillManager extends DefaultHandler implements
 			if (map.get(treeID) == null) {
 				final Tree tree = new Tree();
 				tree.setLabel(treeID);
-				tree.add(p);
+				tree.add(pathToAdd);
 				map.put(treeID, tree);
 			} else {
 				map.get(treeID).add(pathToAdd);
