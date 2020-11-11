@@ -1519,12 +1519,11 @@ public class Tree {
 			//  are passed to a pafm by reference, make a deep copy of the Tree so that changes to identifying path
 			//  properties (path ID, tree ID, etc) in this instance do not propagate to other
 			//  pafm instances (most importantly, the one used by the plugin instance).
-			pafm.addTree(this.clone2());
+			pafm.addTree(this.clone());
 		}
 	}
 
-	@Override
-	public Tree clone() {
+	private Tree cloneOld() {
 		final Tree clone = new Tree();
 		clone.setLabel(getLabel());
 		clone.setBoundingBox(box);
@@ -1532,21 +1531,19 @@ public class Tree {
 		return clone;
 	}
 
-	public Tree clone2() {
-		// The above clone() method does not set joins correctly
+	@Override
+	public Tree clone() {
 		final Tree clone = new Tree();
 		final Map<Integer, Path> idToPathMap = new HashMap<>();
 		for (final Path path : list()) {
-			final Path clonePath = path.createPath();
+			final Path clonePath = path.clone();
 			idToPathMap.put(clonePath.getID(), clonePath);
-			for (int i = 0; i < path.size(); i++) {
-				final PointInImage n = path.getNode(i);
-				clonePath.addNode(new PointInImage(n.getX(), n.getY(), n.getZ()));
-			}
 			clone.add(clonePath);
 		}
 		for (final Path path : list()) {
 			final Path clonePath = idToPathMap.get(path.getID());
+			clonePath.disconnectFromAll();
+			clonePath.setChildren(new HashSet<>());
 			if (path.getStartJoins() != null) {
 				final PointInImage startJoinsPoint = path.getStartJoinsPoint();
 				// Path#getNodeIndex() does not work for some reason...
