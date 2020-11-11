@@ -633,9 +633,15 @@ public class PathManagerUI extends JDialog implements PathAndFillListener,
 	 */
 	public Collection<Path> getSelectedPaths(final boolean ifNoneSelectedGetAll) {
 		return SwingSafeResult.getResult(() -> {
-			if (ifNoneSelectedGetAll && tree.getSelectionCount() == 0)
-				return pathAndFillManager.getPathsFiltered();
 			final Collection<Path> result = new ArrayList<>();
+			if (ifNoneSelectedGetAll && tree.getSelectionCount() == 0) {
+				for (final Path p : pathAndFillManager.getPaths()) {
+					if (p == null || p.isFittedVersionOfAnotherPath()) continue;
+					// If fitted flavor of path exists use it instead
+					final Path pathToAdd = (p.getUseFitted() && p.getFitted() != null) ? p.getFitted() : p;
+					result.add(pathToAdd);
+				}
+			}
 			final TreePath[] selectedPaths = tree.getSelectionPaths();
 			if (selectedPaths == null || selectedPaths.length == 0) {
 				return result;
@@ -645,7 +651,9 @@ public class PathManagerUI extends JDialog implements PathAndFillListener,
 					.getLastPathComponent());
 				if (node != root) {
 					final Path p = (Path) node.getUserObject();
-					result.add(p);
+					// If fitted flavor of path exists use it instead
+					final Path pathToAdd = (p.getUseFitted() && p.getFitted() != null) ? p.getFitted() : p;
+					result.add(pathToAdd);
 				}
 			}
 			return result;

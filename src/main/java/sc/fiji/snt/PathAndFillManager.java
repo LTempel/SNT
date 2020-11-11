@@ -557,6 +557,10 @@ public class PathAndFillManager extends DefaultHandler implements
 	public Collection<Tree> getTrees() {
 		final HashMap<String, Tree> map = new HashMap<>();
 		allPaths.forEach(p->{
+
+			// If fitted flavor of path exists use it instead
+			final Path pathToAdd = (p.getUseFitted() && p.getFitted() != null) ? p.getFitted() : p;
+
 			final String treeID = p.getTreeLabel();
 			if (map.get(treeID) == null) {
 				final Tree tree = new Tree();
@@ -564,7 +568,7 @@ public class PathAndFillManager extends DefaultHandler implements
 				tree.add(p);
 				map.put(treeID, tree);
 			} else {
-				map.get(treeID).add(p);
+				map.get(treeID).add(pathToAdd);
 			}
 		});
 		map.values().forEach( tree -> renameTreeAfterPrimaryPath(tree));
