@@ -1702,6 +1702,18 @@ public class Path implements Comparable<Path> {
 		}
 		else {
 			p.fittedVersionOf = this;
+			if (getStartJoins() != null) {
+				final Path joins = (startJoins.getUseFitted()) ? startJoins.getFitted() : startJoins;
+				final int index = fitted.indexNearestTo(startJoinsPoint.x, startJoinsPoint.y, startJoinsPoint.z);
+				final PointInImage pim = (index == -1) ? startJoinsPoint : fitted.getNodeWithoutChecks(index);
+				fitted.setStartJoin(joins, pim);
+			}
+			if (getEndJoins() != null) {
+				final Path joins = (endJoins.getUseFitted()) ? endJoins.getFitted() : endJoins;
+				final int index = fitted.indexNearestTo(endJoinsPoint.x, endJoinsPoint.y, endJoinsPoint.z);
+				final PointInImage pim = (index == -1) ? endJoinsPoint : fitted.getNodeWithoutChecks(index);
+				fitted.setEndJoin(joins, pim);
+			}
 		}
 	}
 
