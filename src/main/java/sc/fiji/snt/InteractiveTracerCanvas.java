@@ -649,7 +649,10 @@ class InteractiveTracerCanvas extends TracerCanvas {
 				getGuiUtils().tempMsg(
 					"You must close the sigma palette to continue");
 				break;
-
+			case SNTUI.WAITING_FOR_MIN_MAX_CHOICE:
+				getGuiUtils().tempMsg(
+					"You must close the histogram window to continue");
+				break;
 			default:
 				final boolean join = e.isAltDown();
 				if (tracerPlugin.snapCursor && !join && !e.isShiftDown()) {

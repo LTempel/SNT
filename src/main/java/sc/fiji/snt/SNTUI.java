@@ -83,6 +83,7 @@ import sc.fiji.snt.gui.FileDrop;
 import sc.fiji.snt.gui.GuiUtils;
 import sc.fiji.snt.gui.IconFactory;
 import sc.fiji.snt.gui.IconFactory.GLYPH;
+import sc.fiji.snt.gui.MinMaxChooser;
 import sc.fiji.snt.gui.SNTCommandFinder;
 import sc.fiji.snt.gui.SaveMeasurementsCmd;
 import sc.fiji.snt.gui.ScriptInstaller;
@@ -197,6 +198,8 @@ public class SNTUI extends JDialog {
 	static final int WAITING_FOR_SIGMA_POINT_I = 9;
 	static final int WAITING_FOR_SIGMA_POINT_II = 10;
 	static final int WAITING_FOR_SIGMA_CHOICE = 11;
+	static final int WAITING_FOR_MIN_MAX_CHOICE = 18;
+
 	static final int SAVING = 12;
 	/** Flag specifying UI is currently waiting for I/0 operations to conclude */
 	public static final int LOADING = 13;
@@ -853,7 +856,12 @@ public class SNTUI extends JDialog {
 				break;
 
 			case WAITING_FOR_SIGMA_CHOICE:
-				updateStatusText("Close 'Pick Sigma &amp; Max' to continue...");
+				updateStatusText("Close 'Pick Sigmas' to continue...");
+				//disableEverything();
+				break;
+
+			case WAITING_FOR_MIN_MAX_CHOICE:
+				updateStatusText("Drag ROI to a representative region...");
 				//disableEverything();
 				break;
 
@@ -2581,13 +2589,13 @@ public class SNTUI extends JDialog {
 		});
 		hideViewsMenu.add(threeDViewerMenuItem);
 		viewMenu.add(hideViewsMenu);
-		viewMenu.addSeparator();
-		final JMenuItem tItem = showHessianImpMenuItem(null);
-		tItem.setText("<HTML>Show Cached <i>Hessian Image</i>...");
-		viewMenu.add(tItem);
-		final JMenuItem fItem = showFilteredImpMenuItem();
-		fItem.setText("<HTML>Show Cached <i>Secondary Image</i>");
-		viewMenu.add(fItem);
+//		viewMenu.addSeparator();
+//		final JMenuItem tItem = showHessianImpMenuItem(null);
+//		tItem.setText("<HTML>Show Cached <i>Hessian Image</i>...");
+//		viewMenu.add(tItem);
+//		final JMenuItem fItem = showFilteredImpMenuItem();
+//		fItem.setText("<HTML>Show Cached <i>Secondary Image</i>");
+//		viewMenu.add(fItem);
 		return menuBar;
 	}
 
@@ -2856,8 +2864,12 @@ public class SNTUI extends JDialog {
 		});
 
 		optionsMenu.addSeparator();
-		JMenuItem minMaxJmi = new JMenuItem("Adjust Min-Max...");
+		optionsMenu.add(GuiUtils.leftAlignedLabel("Min-Max:", false));
+		JMenuItem minMaxJmi = new JMenuItem("Specify Range Manually...");
 		minMaxJmi.addActionListener(e -> setMinMaxFromUser());
+		optionsMenu.add(minMaxJmi);
+		minMaxJmi = new JMenuItem("Specify Range Visually...");
+		minMaxJmi.addActionListener(e -> setMinMaxFromUserVisual());
 		optionsMenu.add(minMaxJmi);
 		aStarPanel = new JPanel(new BorderLayout());
 		aStarPanel.add(checkboxPanel, BorderLayout.CENTER);
@@ -3147,6 +3159,23 @@ public class SNTUI extends JDialog {
 			plugin.stackMax = minMax[1];
 		}
 		updateSettingsString();
+	}
+
+	private void setMinMaxFromUserVisual() {
+		if (!plugin.accessToValidImageData()) {
+			noValidImageDataError();
+			return;
+		}
+		if (!plugin.uiReadyForModeChange()) {
+			error("Please complete current task before adjusting min-max.");
+			return;
+		}
+		final String choice = getPrimarySecondaryImgChoice("Adjust range for which image?");
+		if (choice != null) {
+			final boolean useSecondary = "Secondary".equalsIgnoreCase(choice);
+			ImagePlus imp = (useSecondary) ? plugin.getSecondaryDataAsImp() : plugin.getImagePlus();
+			new MinMaxChooser(this, plugin, imp, useSecondary, WAITING_FOR_MIN_MAX_CHOICE);
+		}
 	}
 
 	private boolean okToFlushCachedTubeness(final String type) {
@@ -3545,6 +3574,9 @@ public class SNTUI extends JDialog {
 			showStatus("Close the sigma palette to abort sigma input...", true);
 			return; // do nothing: Currently we have no control over the sigma
 					// palette window
+		case (WAITING_FOR_MIN_MAX_CHOICE):
+			showStatus("Close histogram window to abort min-max input..", true);
+			return; 
 		case (WAITING_TO_START_PATH):
 			// If user is aborting something in this state, something
 			// went awry!?. Try to abort all possible lingering tasks
@@ -3625,6 +3657,8 @@ public class SNTUI extends JDialog {
 			return "WAITING_FOR_SIGMA_POINT_II";
 		case WAITING_FOR_SIGMA_CHOICE:
 			return "WAITING_FOR_SIGMA_CHOICE";
+		case WAITING_FOR_MIN_MAX_CHOICE:
+			return "WAITING_FOR_MIN_MAX_CHOICE";
 		case SAVING:
 			return "SAVING";
 		case LOADING:

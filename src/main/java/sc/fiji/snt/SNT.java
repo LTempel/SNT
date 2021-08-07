@@ -1111,7 +1111,7 @@ public class SNT extends MultiDThreePanes implements
 		updateTracingViewers(false);
 	}
 
-	protected void pause(final boolean pause, final boolean hideSideViewsOnPause) {
+	public void pause(final boolean pause, final boolean hideSideViewsOnPause) {
 		if (pause) {
 			if (ui != null && ui.getState() != SNTUI.SNT_PAUSED && !uiReadyForModeChange()) {
 				guiUtils.error("Please finish/abort current task before pausing SNT.");
@@ -2363,6 +2363,11 @@ public class SNT extends MultiDThreePanes implements
 	public void loadSecondaryImage(final RandomAccessibleInterval<FloatType> img, final boolean computeStatistics)
 	{
 		loadSecondaryImage(img, true, computeStatistics);
+	}
+
+	public void setImageMinMax(final float min, final float max) {
+		stackMin = min;
+		stackMax = max;
 	}
 
 	public void setSecondaryImageMinMax(final float min, final float max) {
