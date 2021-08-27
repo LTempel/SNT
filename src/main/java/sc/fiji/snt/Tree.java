@@ -484,41 +484,15 @@ public class Tree implements TreeProperties {
 
 	/**
 	 * @param swcTypes the swc types
-	 * @return the tree
-	 * @throws IllegalArgumentException If Tree does not contain selected types
+	 * @return the sub tree
+	 * @throws IllegalArgumentException if tree contains multiple roots or loops
 	 */
 	Tree subTreeNodeConversion(final int... swcTypes) throws IllegalArgumentException {
-		// this is ~4x slower than Path-based conversion but accurate
-		final List<SWCPoint> nodes = getNodesAsSWCPoints();
-		//System.out.println("nNodes: "+ nodes.size());
-
-		Iterator<SWCPoint> it = nodes.iterator();
-		Set<Integer> idsToRemove = new HashSet<>();
-
-		// Remove filtered nodes
-		while (it.hasNext()) {
-			final SWCPoint node = it.next();
-			if (!matchesType(node, swcTypes))
-				idsToRemove.add(node.id);
-		}
-		if (!idsToRemove.isEmpty()) {
-			it = nodes.iterator();
-			while (it.hasNext()) {
-				final SWCPoint node = it.next();
-				if (idsToRemove.contains(node.id)) {
-					it.remove();
-				}
-			}
-			it = nodes.iterator();
-			while (it.hasNext()) {
-				final SWCPoint node = it.next();
-				if (idsToRemove.contains(node.parent))
-					node.parent = -1;
-			}
-		}
-
-		//System.out.println("Returning subtree with nNodes: "+ nodes.size());
-		return new Tree(nodes, getLabel() + " (filtered)");
+		getGraph().filterVertices(node -> matchesType(node, swcTypes));
+		final Tree subTree = getGraph().getTree();
+		subTree.setLabel(getLabel() + " (filtered)");
+		graph = null; // reset, since filter occurs in place
+		return subTree;
 	}
 
 	private boolean matchesType(final SWCPoint node, final int... swcTypes) {

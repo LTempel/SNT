@@ -1989,6 +1989,12 @@ public class Path implements Comparable<Path> {
 		final double[] optimized_y, final double[] optimized_z)
 	{
 
+		if (getStartJoinsPoint() != null && getStartJoinsPoint().isSameLocation(getNode(0))) {
+			getStartJoinsPoint().x = optimized_x[0];
+			getStartJoinsPoint().y = optimized_y[0];
+			getStartJoinsPoint().z = optimized_z[0];
+		}
+
 		this.points = nPoints;
 		if (tangents_x != null) this.tangents_x = tangents_x.clone();
 		if (tangents_x != null) this.tangents_y = tangents_y.clone();
