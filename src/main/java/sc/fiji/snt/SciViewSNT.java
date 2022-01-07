@@ -205,6 +205,11 @@ public class SciViewSNT {
 		//sciView.centerOnNode(plottedTrees.get(label));
 	}
 
+	public void loadData(){
+		final Volume volume = sciView.addVolume((RandomAccessibleInterval) snt.getLoadedData());
+		volume.setScale(new Vector3f(0.1f, 0.1f ,0.1f));
+	}
+
 	/**
 	 * Gets the specified Tree as a Scenery Node.
 	 *
