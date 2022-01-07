@@ -21,6 +21,7 @@ sciViewSNT = sntService.getOrCreateSciViewSNT()
 tree = sntService.demoTrees().get(0) // retrieve a sample tree from SNTService
 tree.setColor("red")
 sciViewSNT.addTree(tree)
+sciViewSNT.loadData()
 
 // Now let's add a volume:
 ds = datasetIOService.open("http://wsr.imagej.net/images/t1-head.gif")

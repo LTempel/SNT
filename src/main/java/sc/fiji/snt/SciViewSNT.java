@@ -25,10 +25,17 @@ package sc.fiji.snt;
 import graphics.scenery.*;
 import graphics.scenery.attribute.material.DefaultMaterial;
 import graphics.scenery.attribute.material.Material;
+import graphics.scenery.volumes.Volume;
 import ij.IJ;
+import net.imagej.Dataset;
 import net.imagej.ImageJ;
 
+//<<<<<<< Updated upstream
+import net.imglib2.RandomAccessibleInterval;
 import org.jetbrains.annotations.NotNull;
+//=======
+import net.imagej.patcher.LegacyInjector;
+//>>>>>>> Stashed changes
 import org.joml.Vector3f;
 import org.scijava.Context;
 import org.scijava.NullContextException;
@@ -59,12 +66,13 @@ import java.util.*;
  * @author Kyle Harrington
  * @author Tiago Ferreira
  */
+
 public class SciViewSNT {
+
 	private final static String PATH_MANAGER_TREE_LABEL = "Path Manager Contents";
 
 	@Parameter
 	private SciViewService sciViewService;
-
 	private SNT snt;
 	private SciView sciView;
 
@@ -78,6 +86,7 @@ public class SciViewSNT {
 	 * @throws NoClassDefFoundError if SciView/scenery are not available
 	 * @throws NullContextException   If context is null
 	 */
+
 	public SciViewSNT(final Context context) throws NoClassDefFoundError {
 		if (!EnableSciViewUpdateSiteCmd.isSciViewAvailable()) {
 			// If dependencies are missing, warn users politely
@@ -102,6 +111,7 @@ public class SciViewSNT {
 	 *                instance
 	 * @throws NullPointerException If sciView is null
 	 */
+
 	public SciViewSNT(final SciView sciView) {
 		if (sciView == null) throw new NullPointerException();
 		this.sciView = sciView;
@@ -203,6 +213,11 @@ public class SciViewSNT {
 		final String label = getUniqueLabel(plottedTrees, "Tree ", tree.getLabel());
 		add(tree, label);
 		//sciView.centerOnNode(plottedTrees.get(label));
+	}
+
+	public void loadData(){
+		final Volume volume = sciView.addVolume((RandomAccessibleInterval) snt.getLoadedData());
+		volume.setScale(new Vector3f(0.1f, 0.1f ,0.1f));
 	}
 
 	/**
