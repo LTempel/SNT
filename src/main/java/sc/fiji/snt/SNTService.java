@@ -71,6 +71,7 @@ import sc.fiji.snt.viewer.Viewer3D;
  * Service for accessing and scripting the active instance of
  * {@link SNT}.
  *
+ *
  * @author Tiago Ferreira
  * @author Kyle Harrington
  *

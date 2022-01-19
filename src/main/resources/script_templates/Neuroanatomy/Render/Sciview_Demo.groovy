@@ -1,6 +1,8 @@
 #@SNTService sntService
 #@DatasetIOService datasetIOService
 
+
+import org.scijava.vecmath.Vector3f
 import sc.fiji.snt.Tree
 import sc.fiji.snt.SciViewSNT
 
@@ -18,17 +20,19 @@ import sc.fiji.snt.SciViewSNT
 sciViewSNT = sntService.getOrCreateSciViewSNT()
 
 // We can now add reconstructions as we do with Reconstruction Viewer:
-tree = sntService.demoTrees().get(0) // retrieve a sample tree from SNTService
+sciViewSNT.loadData()
+tree = sntService.getTree() // retrieve a shape tree from loaded data
 tree.setColor("red")
 sciViewSNT.addTree(tree)
-sciViewSNT.loadData()
+tree.setScale(new Vector3f(0.01f, 0.01f, 0.01f))
+
 
 // Now let's add a volume:
 ds = datasetIOService.open("http://wsr.imagej.net/images/t1-head.gif")
 sciViewSNT.getSciView().addVolume(ds)
 
 // Let's add another tree, and center the view on it
-tree.translate(2, 2, 2)
+/*tree.translate(2, 2, 2)
 tree.setColor("cyan")
 sciViewSNT.addTree(tree)
-sciViewSNT.getSciView().centerOnNode(sciViewSNT.getTreeAsSceneryNode(tree))
+sciViewSNT.getSciView().centerOnNode(sciViewSNT.getTreeAsSceneryNode(tree))*/

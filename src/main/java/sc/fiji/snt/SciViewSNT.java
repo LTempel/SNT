@@ -208,16 +208,17 @@ public class SciViewSNT {
 	 * @see Tree#getLabel()
 	 * @see Tree#setColor(ColorRGB)
 	 */
-	public void addTree(final Tree tree) {
+	public ShapeTree addTree(final Tree tree) {
 		initSciView();
 		final String label = getUniqueLabel(plottedTrees, "Tree ", tree.getLabel());
-		add(tree, label);
+		return add(tree, label);
 		//sciView.centerOnNode(plottedTrees.get(label));
 	}
 
-	public void loadData(){
+		public void loadData(){
+
 		final Volume volume = sciView.addVolume((RandomAccessibleInterval) snt.getLoadedData());
-		volume.setScale(new Vector3f(0.1f, 0.1f ,0.1f));
+		volume.setScale(new Vector3f(0.1f, 0.1f ,0.85f));
 	}
 
 	/**
@@ -247,7 +248,7 @@ public class SciViewSNT {
 		return  plottedTrees.containsKey(treeLabel);
 	}
 
-	private void add(final Tree tree, final String label) {
+	private ShapeTree add(final Tree tree, final String label) {
 		final ShapeTree shapeTree = new ShapeTree(tree);
 		shapeTree.setName(label);
 		plottedTrees.put(label, shapeTree);
@@ -258,8 +259,8 @@ public class SciViewSNT {
 //		}
 //		//sciView.getCamera().setPosition(treeCenter.minus(new GLVector(0,0,-10f)));
 //		sciView.centerOnNode( shapeTree );
+		return shapeTree;
 	}
-
 	/**
 	 * (Re)loads the current list of Paths in the Path Manager list.
 	 *
