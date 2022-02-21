@@ -218,7 +218,7 @@ public class SciViewSNT {
 		public void loadData(){
 
 		final Volume volume = sciView.addVolume((RandomAccessibleInterval) snt.getLoadedData());
-		volume.setScale(new Vector3f(0.1f, 0.1f ,0.85f));
+		volume.setScale(new Vector3f(0.1f, 0.1f ,0.1f));
 	}
 
 	/**
