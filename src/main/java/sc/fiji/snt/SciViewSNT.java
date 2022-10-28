@@ -25,6 +25,7 @@ package sc.fiji.snt;
 import graphics.scenery.*;
 import graphics.scenery.attribute.material.DefaultMaterial;
 import graphics.scenery.attribute.material.Material;
+import graphics.scenery.controls.OpenVRHMD;
 import graphics.scenery.volumes.Volume;
 import ij.IJ;
 import net.imagej.Dataset;
@@ -169,7 +170,16 @@ public class SciViewSNT {
 			});
 			this.sciView.getFloor().setVisible(false);
 			if (snt != null) syncPathManagerList();
+
+			final OpenVRHMD hmd = new OpenVRHMD();
+			if(hmd.initializedAndWorking()) {
+				setupControllerTracing(hmd);
+			}
 		}
+	}
+
+	private void setupControllerTracing(OpenVRHMD hmd) {
+
 	}
 
 	private void nullifySciView() {

@@ -2211,7 +2211,7 @@ public class SNT extends MultiDThreePanes implements
 
 	}
 
-	synchronized protected void clickForTrace(final double x_in_pane_precise,
+	synchronized public void clickForTrace(final double x_in_pane_precise,
 		final double y_in_pane_precise, final int plane, final boolean join)
 	{
 
