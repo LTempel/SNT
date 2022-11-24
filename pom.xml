@@ -132,7 +132,8 @@
 
 		<!-- Dependency versions -->
 		<sciview.version>e3510f4</sciview.version>
-		<scenery.version>4d07a30</scenery.version>
+		<scenery.version>0a32128</scenery.version>
+		<lwjgl.version>3.3.1</lwjgl.version>
 		<jzy3d.version>2.0.0</jzy3d.version>
 		<jline.version>3.13.1</jline.version>
 		<imagej-plot-service.version>0.1.1</imagej-plot-service.version>
@@ -140,7 +141,7 @@
 		<font-awesome.version>5.15.4</font-awesome.version>
 		<json.version>20211205</json.version>
 		<kotlin.version>1.7.20</kotlin.version>
-		<kotlin.compiler.jvmTarget>1.8</kotlin.compiler.jvmTarget>
+		<kotlin.compiler.jvmTarget>11</kotlin.compiler.jvmTarget>
 
 		<!-- NB: Deploy releases to the SciJava Maven repository. -->
 		<releaseProfiles>sign,deploy-to-scijava</releaseProfiles>

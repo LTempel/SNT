@@ -1,13 +1,22 @@
 package sc.fiji.snt
 
+import graphics.scenery.*
 import graphics.scenery.controls.InputHandler
 import graphics.scenery.controls.OpenVRHMD
 import graphics.scenery.controls.TrackerRole
+import graphics.scenery.controls.behaviours.Grabable
+import graphics.scenery.controls.behaviours.Pressable
 import graphics.scenery.utils.LazyLogger
 import java.lang.UnsupportedOperationException
+import org.joml.Vector3f
+import java.lang.IllegalStateException
+import java.lang.System
+
+
 
 class ControllerTracing(val sciViewSNT: SciViewSNT) {
     val logger by LazyLogger()
+
     init {
         sciViewSNT.sciView.toggleVRRendering()
         val hmd = sciViewSNT.sciView.hub.get<OpenVRHMD>() ?: throw UnsupportedOperationException("No hmd found")
@@ -26,6 +35,27 @@ class ControllerTracing(val sciViewSNT: SciViewSNT) {
                 }
             }
         }
+        val scene = sciViewSNT.sciView.camera?.getScene()?:throw IllegalStateException("No scene found.")
+        val pen = Box(Vector3f())
+        pen.spatial{
+            position = Vector3f()
+        }
+        scene.addChild(pen)
+        val tip = Box(Vector3f())
+        tip.spatial{
+            position = Vector3f()
+        }
+        pen.addChild(tip)
+        var lastPenWriting = 0L
+        pen.addAttribute(Grabable::class.java, Grabable())
+        pen.addAttribute(Pressable::class.java, Pressable(onHold = {
+            if (System.currentTimeMillis() - lastPenWriting > 50){
+                val ink = Sphere()
+                ink.spatial().position=tip.spatial().worldPosition()
+                scene.addChild(ink)
+                lastPenWriting = System.currentTimeMillis()
+            }
+        }))
     }
 }
 
