@@ -2,7 +2,7 @@
  * #%L
  * Fiji distribution of ImageJ for the life sciences.
  * %%
- * Copyright (C) 2010 - 2021 Fiji developers.
+ * Copyright (C) 2010 - 2022 Fiji developers.
  * %%
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as
@@ -163,13 +163,32 @@ public class GroupedTreeStatistics {
 	 * @see #setMinNBins(int)
 	 */
 	public SNTChart getHistogram(final String measurement) {
-		final String normMeasurement = MultiTreeStatistics.getNormalizedMeasurement(measurement, true);
+		return getHistogram(measurement, false);
+	}
+
+	/**
+	 * Gets the relative frequencies histogram for a univariate measurement as a
+	 * polar (rose) plot assuming a data range between [0-360]. The number of bins
+	 * is determined using the Freedman-Diaconis rule.
+	 *
+	 * @param measurement the measurement (e.g.,
+	 *                    {@link MultiTreeStatistics#AVG_REMOTE_ANGLE)
+	 * @return the frame holding the histogram
+	 * @see #getHistogram(String)
+	 * @see #setMinNBins(int)
+	 */
+	public SNTChart getPolarHistogram(final String measurement) {
+		return getHistogram(measurement, true);
+	}
+
+	private SNTChart getHistogram(final String measurement, final boolean polar) {
+		final String normMeasurement = TreeStatistics.getNormalizedMeasurement(measurement);
 		// Retrieve all HistogramDatasetPlus instances
 		final double[] limits = new double[] {Double.MAX_VALUE, Double.MIN_VALUE};
 		for (final String groupLabel : getGroups()) {
 			final double groupMax = getGroupStats(groupLabel).getDescriptiveStats(normMeasurement).getMax();
 			final double groupMin = getGroupStats(groupLabel).getDescriptiveStats(normMeasurement).getMin();
-			if (groupMax < limits[0]) limits[0] = groupMin;
+			if (groupMin < limits[0]) limits[0] = groupMin;
 			if (groupMax > limits[1]) limits[1] = groupMax;
 		}
 		final LinkedHashMap<String, HDPlus> hdpMap = new LinkedHashMap<>();
@@ -188,7 +207,9 @@ public class GroupedTreeStatistics {
 		hdpMap.forEach((label, hdp) -> {
 			dataset.addSeries(label, hdp.valuesAsArray(), finalBinCount, limits[0], limits[1]);
 		});
-		return AnalysisUtils.createHistogram(normMeasurement, hdpMap.size(), dataset);
+		return (polar) ?
+				AnalysisUtils.createPolarHistogram(normMeasurement, dataset, hdpMap.size(), finalBinCount)
+				: AnalysisUtils.createHistogram(normMeasurement, hdpMap.size(), dataset);
 	}
 
 	/**
@@ -203,7 +224,7 @@ public class GroupedTreeStatistics {
 	 */
 	public SNTChart getBoxPlot(final String measurement) {
 
-		final String normMeasurement = MultiTreeStatistics.getNormalizedMeasurement(measurement, true);
+		final String normMeasurement = TreeStatistics.getNormalizedMeasurement(measurement);
 		final DefaultBoxAndWhiskerCategoryDataset dataset = new DefaultBoxAndWhiskerCategoryDataset();
 		groups.forEach((label, mstats) -> {
 			final HDPlus hdp = mstats.new HDPlus(normMeasurement);
@@ -547,6 +568,16 @@ public class GroupedTreeStatistics {
 
 	}
 
+	/**
+	 * Sets the minimum number of bins when assembling histograms.
+	 *
+	 * @param minNoOfBins the minimum number of bins.
+	 */
+	public void setMinNBins(int minNoOfBins) {
+		this.minNoOfBins = minNoOfBins;
+	}
+
+
 	/* IDE debug method */
 	public static void main(final String[] args) {
 		final ImageJ ij = new ImageJ();
@@ -556,15 +587,5 @@ public class GroupedTreeStatistics {
 		groupedStats.addGroup(sntService.demoTrees().subList(2, 4), "Group 2");
 		groupedStats.getHistogram(TreeStatistics.INTER_NODE_DISTANCE).show();
 		groupedStats.getBoxPlot("node dx sq").setVisible(true);
-
-	}
-
-	/**
-	 * Sets the minimum number of bins when assembling histograms.
-	 *
-	 * @param minNoOfBins the minimum number of bins.
-	 */
-	public void setMinNBins(int minNoOfBins) {
-		this.minNoOfBins = minNoOfBins;
 	}
 }

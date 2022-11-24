@@ -2,7 +2,7 @@
  * #%L
  * Fiji distribution of ImageJ for the life sciences.
  * %%
- * Copyright (C) 2010 - 2021 Fiji developers.
+ * Copyright (C) 2010 - 2022 Fiji developers.
  * %%
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as
@@ -53,6 +53,7 @@ public class IconFactory {
 			ALIGN_CENTER('\uf037', true), //
 			ALIGN_RIGHT('\uf038', true), //
 			ATLAS('\uf558', true), //
+			//ARROWS_V('\uf338', true), //
 			//ATOM('\uf5d2', true), //
 			BINOCULARS('\uf1e5', true), //
 			BOLD('\uf032', true),//
@@ -69,6 +70,7 @@ public class IconFactory {
 			CHECK_DOUBLE('\uf560', true), //
 			CIRCLE('\uf192', false), //
 			CLOUD('\uf381', true), //
+			CLONE('\uf24d', false), //
 			CODE('\uf120', true), //
 			CODE2('\uf121', true), //
 			COG('\uf013', true), //
@@ -76,6 +78,7 @@ public class IconFactory {
 			COLOR('\uf53f', true), //
 			COLOR2('\uf5c3', true), //
 			COMMENTS('\uf086', false), //
+			COMPRESS('\uf422', true), //
 			COPY('\uf0c5', false), //
 			CROSSHAIR('\uf05b', true), //
 			CSV('\uf6dd', true), //
@@ -85,30 +88,36 @@ public class IconFactory {
 			DATABASE('\uf1c0', true), //
 			DELETE('\uf55a', true), //
 			DIAGRAM('\uf542', true), //
+			DICE_20('\uf6cf', true), //
 			DOTCIRCLE('\uf192', true), //
 			//DOWNLOAD('\uf019', true), //
 			DRAFT('\uf568', true), //
+			ELLIPSIS_VERTICAL('\uf142', true), //
 			EQUALS('\uf52c', true), //
 			EXPAND('\uf065', true), //
 			EXPAND_ARROWS1('\uf337', true), //
 			EXPAND_ARROWS2('\uf31e', true), //
 			EXPLORE('\uf610', true), //
 			EXPORT('\uf56e', true), //
+			EXTERNAL_LINK('\uf35d', true), //
 			EYE('\uf06e', false), //
 			EYE_SLASH('\uf070', false), //
 			FILE('\uf15b', false), //
 			FILE_IMAGE('\uf1c5', false), //
 			FILL('\uf575', true), //
 			FILTER('\uf0b0', true), //
+			FIRST_AID('\uf469', true), //
 			FOLDER('\uf07b', false), //
 			FONT('\uf031', true), //
 			FOOTPRINTS('\uf54b', true), //
 			GEM('\uf3a5', true), //
 			//GLOBE('\uf0ac', true), //
+			GRID('\uf00a', true), //
 			GRADUATION_CAP('\uf19d', true), //
 			HAND('\uf256', false), //
 			HOME('\uf015', true), //
 			ID('\uf2c1', false), //
+			ID_ALT('\uf47f', true), //
 			INFO('\uf129', true), //
 			IMAGE('\uf03e', false), //
 			IMPORT('\uf56f', true), //
@@ -135,19 +144,23 @@ public class IconFactory {
 			POINTER('\uf245', true), //
 			PLUS('\uf0fe', false), //
 			PREVIOUS('\uf358', false), //
-			QUESTION('\uf128', true), //
+			QUESTION('\uf059', false), //
 			QUIT('\uf011', true), //
 			RECYCLE('\uf1b8', true), //
 			REDO('\uf01e', true), //
+			ROBOT('\uf544', true), //
 			ROCKET('\uf135', true), //
 			RULER('\uf546', true), //
+			RULER_VERTICAL('\uf548', true), //
 			SAVE('\uf0c7', false), //
 			SCROLL('\uf70e', true), //
 			SEARCH('\uf002', true), //
 			SEARCH_MINUS('\uf010', true), //
 			SEARCH_PLUS('\uf00e', true), //
+			SHUFFLE('\uf074', true), //
 			SIGNS('\uf277', true), //
 			SLIDERS('\uf1de', true), //
+			SPINNER('\uf110', true), //
 			SORT('\uf15d', true), //
 			STETHOSCOPE('\uf0f1', true), //
 			STREAM('\uf550', true), //
@@ -166,7 +179,8 @@ public class IconFactory {
 			UNLINK('\uf127', true), //
 			VIDEO('\uf03d', true), //
 			WIDTH('\uf337', true), //
-			WINDOWS('\uf2d2', false);
+			WINDOWS('\uf2d2', false), //
+			WIZARD('\uf6e8', true);
 
 		private final char id;
 		private final boolean solid;

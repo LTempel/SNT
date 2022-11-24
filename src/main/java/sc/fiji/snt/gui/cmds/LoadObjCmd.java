@@ -2,7 +2,7 @@
  * #%L
  * Fiji distribution of ImageJ for the life sciences.
  * %%
- * Copyright (C) 2010 - 2021 Fiji developers.
+ * Copyright (C) 2010 - 2022 Fiji developers.
  * %%
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as
@@ -126,8 +126,11 @@ public class LoadObjCmd extends ContextCommand {
 
 	private int loadMeshes(final File[] files) {
 		final List<OBJMesh> meshes = new ArrayList<>(files.length);
+		int index = 0;
 		for (final File file : files) {
 			try {
+				if (recViewer.getManagerPanel() != null)
+					recViewer.getManagerPanel().showProgress(index++, files.length);
 				final OBJMesh objMesh = new OBJMesh(file.getAbsolutePath());
 				objMesh.setColor(color, transparency);
 				if (box) objMesh.setBoundingBoxColor(color);
@@ -138,19 +141,26 @@ public class LoadObjCmd extends ContextCommand {
 		}
 		final int existingMeshes = recViewer.getMeshes().size();
 		recViewer.add(meshes);
+		if (recViewer.getManagerPanel() != null)
+			recViewer.getManagerPanel().showProgress(0,0);
 		return recViewer.getMeshes().size() - existingMeshes;
 	}
 
 	private boolean loadMesh(final String filePath) {
 		try {
+			if (recViewer.getManagerPanel() != null)
+				recViewer.getManagerPanel().showProgress(-1, -1);
 			final OBJMesh objMesh = new OBJMesh(filePath);
 			objMesh.setColor(color, transparency);
 			if (box) objMesh.setBoundingBoxColor(color);
 			return recViewer.addMesh(objMesh);
 		} catch (final IllegalArgumentException ex) {
 			logService.error(String.format("%s: %s", file.getAbsolutePath(), ex.getMessage()));
-			return false;
+		} finally {
+			if (recViewer.getManagerPanel() != null)
+				recViewer.getManagerPanel().showProgress(0, 0);
 		}
+		return false;
 	}
 
 	private String getExitMsg(final String msg) {

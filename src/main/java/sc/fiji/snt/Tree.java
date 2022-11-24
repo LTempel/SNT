@@ -2,7 +2,7 @@
  * #%L
  * Fiji distribution of ImageJ for the life sciences.
  * %%
- * Copyright (C) 2010 - 2021 Fiji developers.
+ * Copyright (C) 2010 - 2022 Fiji developers.
  * %%
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as
@@ -25,6 +25,7 @@ package sc.fiji.snt;
 import java.io.File;
 import java.io.IOException;
 import java.util.*;
+import java.util.stream.Collectors;
 
 import net.imagej.Dataset;
 import org.apache.commons.math3.stat.descriptive.SummaryStatistics;
@@ -152,10 +153,14 @@ public class Tree implements TreeProperties {
 	 * @throws IllegalArgumentException if file path is not valid
 	 */
 	public Tree(final String filename, final String compartment) throws IllegalArgumentException {
-		final File f = new File(filename);
+		File f;
+		if (filename.startsWith("~"))
+			f = new File(filename.replaceFirst("^~", System.getProperty("user.home")));
+		else
+			f = new File(filename);
 		if (!f.exists())
 			throw new IllegalArgumentException("File does not exist: " + filename);
-		initPathAndFillManagerFromFile(filename, compartment);
+		initPathAndFillManagerFromFile(f.getAbsolutePath(), compartment);
 		tree = pafm.getPaths();
 		setLabel(SNTUtils.stripExtension(f.getName()));
 	}
@@ -440,7 +445,7 @@ public class Tree implements TreeProperties {
 	Tree subTreePathBased2(final int... swcTypes) {
 		// This alters the # of | branches
 		final Tree subtree = new Tree();
-		ArrayList<Path> pathPool = new ArrayList<Path>(tree);
+		ArrayList<Path> pathPool = new ArrayList<>(tree);
 		for (final Path p : pathPool) {
 			if (matchesType(p, swcTypes)) {
 				if (subtree.isEmpty()) {
@@ -609,11 +614,16 @@ public class Tree implements TreeProperties {
 	 *         {@link Path#SWC_DENDRITE}, etc.) present in the tree
 	 */
 	public Set<Integer> getSWCTypes() {
+		return getSWCTypes(true); // backwardsCompatibility
+	}
+
+	public Set<Integer> getSWCTypes(final boolean includeSoma) {
 		final HashSet<Integer> types = new HashSet<>();
 		final Iterator<Path> it = tree.iterator();
 		while (it.hasNext()) {
 			types.add(it.next().getSWCType());
 		}
+		if (!includeSoma) types.remove(Path.SWC_SOMA);
 		return types;
 	}
 
@@ -658,6 +668,18 @@ public class Tree implements TreeProperties {
 			}
 		}
 		return (points.isEmpty()) ? null : points;
+	}
+
+	/**
+	 * Checks whether this Tree has a valid soma annotation, i.e., only a single
+	 * primary path tagged with {@link Path#SWC_SOMA}.
+	 *
+	 * @return Returns true, if soma annotation is valid.
+	 */
+	public boolean validSoma() {
+		final List<Path> somas = tree.stream().filter(path -> Path.SWC_SOMA == path.getSWCType())
+				.collect(Collectors.toList());
+		return !somas.isEmpty() && somas.size() < 2 && somas.stream().allMatch(Path::isPrimary);
 	}
 
 	/**
@@ -860,6 +882,10 @@ public class Tree implements TreeProperties {
 		return list;
 	}
 
+	public long getNodesCount() {
+		return tree.stream().mapToLong(Path::size).sum();
+	}
+
 	/**
 	 * Assesses whether this Tree has depth.
 	 *
@@ -942,8 +968,7 @@ public class Tree implements TreeProperties {
 		int d = (int) Math.round(bound2.z - bound1.z);
 		if (d < 1) d = 1;
 		if (d > 1) d += zPadding;
-		final ImagePlus imp = IJ.createImage(null, w, h, d, bitDepth);
-		return imp;
+		return IJ.createImage(null, w, h, d, bitDepth);
 	}
 
 	/**
@@ -1222,7 +1247,8 @@ public class Tree implements TreeProperties {
 	 */
 	public void setLabel(final String label) {
 		this.label = label;
-		getProperties().setProperty(TreeProperties.KEY_LABEL, label);
+		if (label != null)
+			getProperties().setProperty(TreeProperties.KEY_LABEL, label);
 	}
 
 	/**
@@ -1236,7 +1262,7 @@ public class Tree implements TreeProperties {
 	}
 
 	public List<SWCPoint> getNodesAsSWCPoints() throws IllegalArgumentException {
-		if (isEmpty()) return new ArrayList<SWCPoint>();
+		if (isEmpty()) return new ArrayList<>();
 		initPathAndFillManager();
 		try {
 			return pafm.getSWCFor(tree);
@@ -1386,7 +1412,7 @@ public class Tree implements TreeProperties {
 		final List<Tree> trees = new ArrayList<>();
 		if (dir == null) return trees;
 		final File dirFile = new File(dir);
-		final File treeFiles[] = SNTUtils.getReconstructionFiles(dirFile, pattern);
+		final File[] treeFiles = SNTUtils.getReconstructionFiles(dirFile, pattern);
 		if (treeFiles == null || treeFiles.length == 0) {
 			return trees;
 		}
@@ -1491,20 +1517,29 @@ public class Tree implements TreeProperties {
 
 	/**
 	 * Retrieves an approximate estimate of Tree's volume by approximating the
-	 * volume of each path, and summing to total. THe volume of each path is
+	 * volume of each path, and summing to total. The volume of each path is
 	 * computed assuming the volume of each of inter-node segment to be that of a
 	 * truncated cone (Frustum).
 	 * 
-	 * @return the approximate volume or 9 if this Tree's paths have no radius
-	 *         information
+	 * @return the approximate volume or NaN if this Tree's paths have no radius
 	 * @see Path#getApproximatedVolume()
 	 */
 	public double getApproximatedVolume() {
-		double volume = 0;
-		for (final Path path : tree) {
-			volume += path.getApproximatedVolume();
-		}
-		return volume;
+		return tree.stream().mapToDouble(Path::getApproximatedVolume).sum();
+	}
+
+	/**
+	 * Retrieves an approximate estimate of Tree's surface are by approximating the
+	 * surface area of each path, and summing to total. The surface of each path is
+	 * computed assuming the lateral surface area of a conical frustum between
+	 * nodes.
+	 * 
+	 * @return the approximate surface area or NaN if this Tree's paths have no
+	 *         radius
+	 * @see Path#getApproximatedSurface()
+	 */
+	public double getApproximatedSurface() {
+		return tree.stream().mapToDouble(Path::getApproximatedSurface).sum();
 	}
 
 	/**
@@ -1588,6 +1623,7 @@ public class Tree implements TreeProperties {
 			return dimensionsNeedToBeComputed;
 		}
 
+		@Override
 		public String toString() {
 			return "[TreeBoundingBox: origin: " + this.origin + ", originOpposite: " + this.originOpposite + "]";
 		}
@@ -1616,9 +1652,10 @@ public class Tree implements TreeProperties {
 		} else {
 			pafm.assignSpatialSettings(imp);
 			cal = imp.getCalibration();
+			getProperties().setProperty(TreeProperties.KEY_IMG, imp.getTitle());
 		}
 		list().forEach(path -> path.setSpacing(cal));
-		getProperties().setProperty(TreeProperties.KEY_SPATIAL_UNIT, cal.getUnit());
+		getProperties().setProperty(KEY_SPATIAL_UNIT, cal.getUnit());
 	}
 
 	public void assignImage(final Dataset dataset) {
@@ -1631,7 +1668,7 @@ public class Tree implements TreeProperties {
 			cal = pafm.assignSpatialSettings(dataset);
 		}
 		list().forEach(path -> path.setSpacing(cal));
-		getProperties().setProperty(TreeProperties.KEY_SPATIAL_UNIT, cal.getUnit());
+		getProperties().setProperty(KEY_SPATIAL_UNIT, cal.getUnit());
 	}
 
 	/**
@@ -1664,7 +1701,7 @@ public class Tree implements TreeProperties {
 
 	private PointInImage swap(final PointInImage pim, int swapAxis1, int swapAxis2, int unchangedAxis) {
 		// swap axis1 and axis2
-		final Map<Integer, Double> coordMap = new HashMap<Integer, Double>();
+		final Map<Integer, Double> coordMap = new HashMap<>();
 		coordMap.put(swapAxis1, pim.getCoordinateOnAxis(swapAxis2));
 		coordMap.put(swapAxis2, pim.getCoordinateOnAxis(swapAxis1));
 		coordMap.put(unchangedAxis, pim.getCoordinateOnAxis(unchangedAxis));

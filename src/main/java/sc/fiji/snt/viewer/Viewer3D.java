@@ -2,7 +2,7 @@
  * #%L
  * Fiji distribution of ImageJ for the life sciences.
  * %%
- * Copyright (C) 2010 - 2021 Fiji developers.
+ * Copyright (C) 2010 - 2022 Fiji developers.
  * %%
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as
@@ -22,9 +22,9 @@
 
 package sc.fiji.snt.viewer;
 
+import java.awt.BorderLayout;
 import java.awt.Component;
 import java.awt.Container;
-import java.awt.Desktop;
 import java.awt.Dimension;
 import java.awt.DisplayMode;
 import java.awt.Font;
@@ -55,6 +55,7 @@ import java.util.stream.Collectors;
 import javax.swing.*;
 import javax.swing.Timer;
 import javax.swing.border.Border;
+import javax.swing.event.ListSelectionEvent;
 import javax.swing.tree.DefaultMutableTreeNode;
 import javax.swing.tree.DefaultTreeCellRenderer;
 import javax.swing.tree.DefaultTreeModel;
@@ -62,23 +63,24 @@ import javax.swing.tree.TreeNode;
 import javax.swing.tree.TreePath;
 
 import org.jzy3d.bridge.awt.FrameAWT;
+import org.jzy3d.chart.AWTNativeChart;
 import org.jzy3d.chart.Chart;
 import org.jzy3d.chart.Settings;
-import org.jzy3d.chart.SwingChart;
 import org.jzy3d.chart.controllers.ControllerType;
 import org.jzy3d.chart.controllers.camera.AbstractCameraController;
 import org.jzy3d.chart.controllers.mouse.AWTMouseUtilities;
 import org.jzy3d.chart.controllers.mouse.camera.AWTCameraMouseController;
 import org.jzy3d.chart.controllers.thread.camera.CameraThreadController;
+import org.jzy3d.chart.factories.AWTChartFactory;
 import org.jzy3d.chart.factories.ChartFactory;
 import org.jzy3d.chart.factories.EmulGLChartFactory;
 import org.jzy3d.chart.factories.IChartFactory;
 import org.jzy3d.chart.factories.IFrame;
 import org.jzy3d.chart.factories.OffscreenChartFactory;
-import org.jzy3d.chart.factories.SwingChartFactory;
 import org.jzy3d.colors.Color;
 import org.jzy3d.colors.ColorMapper;
 import org.jzy3d.colors.ISingleColorable;
+import org.jzy3d.debugGL.tracers.DebugGLChart3d;
 import org.jzy3d.events.ViewPointChangedEvent;
 import org.jzy3d.maths.BoundingBox3d;
 import org.jzy3d.maths.Coord2d;
@@ -93,6 +95,7 @@ import org.jzy3d.plot3d.primitives.Shape;
 import org.jzy3d.plot3d.primitives.Sphere;
 import org.jzy3d.plot3d.primitives.Tube;
 import org.jzy3d.plot3d.primitives.Wireframeable;
+import org.jzy3d.plot3d.primitives.axis.layout.fonts.HiDPITwoFontSizesPolicy;
 import org.jzy3d.plot3d.primitives.axis.layout.providers.ITickProvider;
 import org.jzy3d.plot3d.primitives.axis.layout.providers.RegularTickProvider;
 import org.jzy3d.plot3d.primitives.axis.layout.providers.SmartTickProvider;
@@ -135,6 +138,7 @@ import org.scijava.ui.swing.script.TextEditor;
 import org.scijava.util.*;
 
 import com.jidesoft.swing.CheckBoxList;
+import com.jidesoft.swing.CheckBoxListSelectionModel;
 import com.jidesoft.swing.CheckBoxTree;
 import com.jidesoft.swing.ListSearchable;
 import com.jidesoft.swing.SearchableBar;
@@ -154,6 +158,7 @@ import sc.fiji.snt.SNTUtils;
 import sc.fiji.snt.Tree;
 import sc.fiji.snt.TreeProperties;
 import sc.fiji.snt.analysis.MultiTreeColorMapper;
+import sc.fiji.snt.analysis.SNTChart;
 import sc.fiji.snt.analysis.SNTTable;
 import sc.fiji.snt.analysis.TreeAnalyzer;
 import sc.fiji.snt.analysis.TreeColorMapper;
@@ -162,11 +167,12 @@ import sc.fiji.snt.annotation.AllenCompartment;
 import sc.fiji.snt.annotation.AllenUtils;
 import sc.fiji.snt.annotation.VFBUtils;
 import sc.fiji.snt.annotation.ZBAtlasUtils;
+import sc.fiji.snt.gui.SNTCommandFinder;
 import sc.fiji.snt.gui.FileDrop;
 import sc.fiji.snt.gui.GuiUtils;
 import sc.fiji.snt.gui.IconFactory;
+import sc.fiji.snt.gui.MeasureUI;
 import sc.fiji.snt.gui.IconFactory.GLYPH;
-import sc.fiji.snt.gui.SNTCommandFinder;
 import sc.fiji.snt.gui.SNTSearchableBar;
 import sc.fiji.snt.gui.SaveMeasurementsCmd;
 import sc.fiji.snt.gui.cmds.*;
@@ -177,6 +183,7 @@ import sc.fiji.snt.plugin.AnalyzerCmd;
 import sc.fiji.snt.plugin.BrainAnnotationCmd;
 import sc.fiji.snt.plugin.ConvexHullCmd;
 import sc.fiji.snt.plugin.GroupAnalyzerCmd;
+import sc.fiji.snt.plugin.ShollAnalysisBulkTreeCmd;
 import sc.fiji.snt.plugin.ShollAnalysisTreeCmd;
 import sc.fiji.snt.plugin.StrahlerCmd;
 import sc.fiji.snt.util.PointInImage;
@@ -211,7 +218,7 @@ public class Viewer3D {
 			}
 			throw new IllegalArgumentException("'" + label + "': not a recognizable engine");
 		}
-	};
+	}
 
 	/**
 	 * Presets of a scene's view point.
@@ -317,6 +324,8 @@ public class Viewer3D {
 	private FileDropWorker fileDropWorker;
 	private boolean abortCurrentOperation;
 	private final Engine ENGINE;
+	private SNTCommandFinder cmdFinder;
+
 
 	@Parameter
 	private Context context;
@@ -370,6 +379,7 @@ public class Viewer3D {
 	public Viewer3D(final Context context) {
 		this();
 		init(context);
+		if (!SNTUtils.isContextSet()) SNTUtils.setContext(context);
 	}
 
 	/**
@@ -396,8 +406,7 @@ public class Viewer3D {
 		if (interactive) {
 			if (ENGINE == Engine.OFFSCREEN)
 				throw new IllegalArgumentException("Offscreen engine cannot be used interactively");
-			init(new Context(CommandService.class, DisplayService.class, PrefService.class, SNTService.class,
-					UIService.class));
+			init(SNTUtils.getContext());
 		}
 	}
 
@@ -411,6 +420,7 @@ public class Viewer3D {
 		initManagerList();
 		context.inject(this);
 		prefs.setPreferences();
+		cmdFinder = new SNTCommandFinder(this);
 	}
 
 	protected static void workaroundIntelGraphicsBug() { // FIXME: This should go away with jogl 2.40?
@@ -427,7 +437,7 @@ public class Viewer3D {
 	/**
 	 * Returns this Viewer's id.
 	 *
-	 * @return this this Viewer's unique numeric ID.
+	 * @return this Viewer's unique numeric ID.
 	 */
 	public int getID() {
 		return id;
@@ -450,7 +460,7 @@ public class Viewer3D {
 		if (enabled) view.shoot(); // same as char.render();
 		if (managerList != null) {
 			managerList.model.setListenersEnabled(viewUpdatesEnabled);
-			managerList.model.update();
+			//setListenersEnabled already calls managerList.model.update();
 		}
 		if (viewUpdatesEnabled) {
 			chart.getView().updateBounds();
@@ -466,8 +476,7 @@ public class Viewer3D {
 		if (chartExists()) return false;
 		final Quality quality = Quality.Nicest();
 		quality.setHiDPIEnabled(true); // requires java 9+
-		chart = new AChart(quality, this); // There does not seem to be a swing implementation of
-												  // ICameraMouseController so we are stuck with AWT
+		chart = new AChart(quality, this);
 		chart.black();
 		view = chart.getView();
 		view.setBoundMode(ViewBoundMode.AUTO_FIT);
@@ -476,6 +485,7 @@ public class Viewer3D {
 		chart.getCanvas().addKeyController(keyController);
 		chart.getCanvas().addMouseController(mouseController);
 		chart.setAxeDisplayed(false);
+		chart.setAnimated(true);
 		squarify("none", false);
 		currentView = ViewMode.DEFAULT;
 		if ( !(chart.getCanvas() instanceof OffscreenCanvas)) {
@@ -519,11 +529,12 @@ public class Viewer3D {
 			final ISquarifier squarifier = view.getSquarifier();
 			final boolean squared = view.getSquared();
 			final CameraMode currentCameraMode = view.getCameraMode();
-			final ViewportMode viewPortMode = view.getCamera().getMode();
+			final ViewportMode viewPortMode = view.getCamera().getViewportMode();
 			final Coord3d currentViewPoint = view.getViewPoint();
 			final BoundingBox3d currentBox = view.getBounds();
 			final boolean isAnimating = mouseController.isAnimating();
-			chart.stopAnimation();
+			setAnimationEnabled(false);
+			chart.stopAllThreads();
 			chart.dispose();
 			chart = null;
 			initView();
@@ -540,7 +551,10 @@ public class Viewer3D {
 			view.setBoundManual(currentBox);
 			addAllObjects();
 			updateView();
-			if (isAnimating) setAnimationEnabled(true);
+			setAnimationEnabled(isAnimating);
+			if (frame != null && frame.managerPanel != null && frame.managerPanel.debugger != null) {
+				frame.managerPanel.debugger.setWatchedChart(chart);
+			}
 			//if (managerList != null) managerList.selectAll();
 		}
 		catch (final GLException | NullPointerException exc) {
@@ -600,7 +614,7 @@ public class Viewer3D {
 		dup.view.setSquarifier(view.getSquarifier());
 		dup.view.setSquared(view.getSquared());
 		dup.view.setCameraMode(view.getCameraMode());
-		dup.view.getCamera().setViewportMode(view.getCamera().getMode());
+		dup.view.getCamera().setViewportMode(view.getCamera().getViewportMode());
 		dup.view.setViewPoint(view.getViewPoint().clone());
 		dup.setSceneUpdatesEnabled(viewUpdatesEnabled);
 		dup.updateView();
@@ -631,7 +645,7 @@ public class Viewer3D {
 	 */
 	public void setEnableDebugMode(final boolean enable) {
 		if (frame != null && frame.managerPanel != null) {
-			frame.managerPanel.debugCheckBox.setSelected(enable);
+			frame.managerPanel.setDebuggerEnabled(enable);
 		}
 		SNTUtils.setDebugMode(enable);
 	}
@@ -783,16 +797,16 @@ public class Viewer3D {
 	private void initManagerList() {
 		managerList = new CheckboxListEditable(new DefaultUpdatableListModel<>());
 		managerList.getCheckBoxListSelectionModel().addListSelectionListener(e -> {
-			if (!e.getValueIsAdjusting()) {
-				final List<String> selectedKeys = getLabelsCheckedInManager();
-				plottedTrees.forEach((k1, shapeTree) -> {
-					shapeTree.setDisplayed(selectedKeys.contains(k1));
+			if (!e.getValueIsAdjusting() && managerList.isVisible()) {
+				final List<String> selectedKeys = managerList.getCheckBoxListSelectedValues(e);
+				plottedTrees.forEach((k, shapeTree) -> {
+					shapeTree.setDisplayed(selectedKeys.contains(k));
 				});
-				plottedObjs.forEach((k2, drawableVBO) -> {
-					drawableVBO.setDisplayed(selectedKeys.contains(k2));
+				plottedObjs.forEach((k, drawableVBO) -> {
+					drawableVBO.setDisplayed(selectedKeys.contains(k));
 				});
-				plottedAnnotations.forEach((k2, annot) -> {
-					annot.getDrawable().setDisplayed(selectedKeys.contains(k2));
+				plottedAnnotations.forEach((k, annot) -> {
+					annot.getDrawable().setDisplayed(selectedKeys.contains(k));
 				});
 				// view.shoot();
 			}
@@ -802,6 +816,10 @@ public class Viewer3D {
 	protected Color fromAWTColor(final java.awt.Color color) {
 		return (color == null) ? getDefColor() : new Color(color.getRed(), color
 			.getGreen(), color.getBlue(), color.getAlpha());
+	}
+
+	private java.awt.Color toAWTColor(final Color color) {
+		return new java.awt.Color(color.r, color.g, color.b, color.a);
 	}
 
 	private Color fromColorRGB(final ColorRGB color) {
@@ -876,7 +894,7 @@ public class Viewer3D {
 	 *                   ignore this option altogether. Set it to {@code unique} to
 	 *                   assign unique colors to each tree in the collection.
 	 * @param commonTags common tag(s) to be assigned to the group (to be displayed
-	 *                   in 'RV Controls' list.
+	 *                   in 'RV Controls' list).
 	 */
 	public void addTrees(final Collection<Tree> trees, final String color, final String... commonTags) {
 		if (commonTags != null) {
@@ -1078,7 +1096,7 @@ public class Viewer3D {
 	 * @param points the collection of points defining the convex set.
 	 * @param label  the (optional) annotation identifier. If null or empty, a
 	 *               unique label will be generated.
-	 * @param computeVolume whether or not to compute the volume of the convex hull.
+	 * @param computeVolume whether to compute the volume of the convex hull.
 	 * 				 If true, the volume is stored in the "volume" field of the 
 	 * 				 returned {@link Annotation3D} object.
 	 * @return the {@link Annotation3D}
@@ -1285,7 +1303,7 @@ public class Viewer3D {
 		}
 		if (bounds.isPoint())
 			return;
-		// chart.view().lookToBox(bounds); seems to 'loose'
+		// chart.view().lookToBox(bounds); seems too 'loose'
 		BoundingBox3d zoomedBox = bounds.scale(new Coord3d(.85f, .85f, .85f));
 		zoomedBox = zoomedBox.shift((bounds.getCenter().sub(zoomedBox.getCenter())));
 		chart.view().lookToBox(zoomedBox);
@@ -1364,6 +1382,10 @@ public class Viewer3D {
 		return show(0, 0);
 	}
 
+	public Frame getFrame() {
+		return frame;
+	}
+
 	/**
 	 * Displays the viewer under specified dimensions. Useful when generating
 	 * scene animations programmatically.
@@ -1411,8 +1433,9 @@ public class Viewer3D {
 			final int h = (height < 0) ? dm.getHeight() : height;
 			frame = new ViewerFrame((AChart)chart, w, h, managerList != null, gConfiguration);
 		}
+		updateView();
+		frame.canvas.requestFocusInWindow();
 		frame.setVisible(true);
-		displayMsg("Press 'H' or 'F1' for help", 3000);
 		return frame;
 	}
 
@@ -1451,32 +1474,34 @@ public class Viewer3D {
 			components.add(frame.manager);
 		if (frame.allenNavigator != null) {
 			components.add(frame.allenNavigator.dialog);
-			components.add(frame.allenNavigator.tree.getComponentPopupMenu());
 		}
 		if (managerList != null)
 			components.add(managerList.getComponentPopupMenu());
 		GuiUtils.setLookAndFeel(lookAndFeelName, false, components.toArray(new Component[0]));
 	}
 
-	private void displayMsg(final String msg) {
-		displayMsg(msg, 2500);
+	private void displayBanner(final String msg) {
+		GuiUtils.displayBanner(msg, (isDarkModeOn()) ? java.awt.Color.BLACK : java.awt.Color.WHITE,
+				(Component) chart.getCanvas());
 	}
 
-	private void delayedMsg(final int delay, final String msg, final int duration) {
-		final Timer timer = new Timer(delay, e -> displayMsg(msg, duration));
-		timer.setRepeats(false);
-		timer.start();
+	private void displayMsg(final String msg) {
+		displayMsg(msg, 3000);
 	}
 
 	private void displayMsg(final String msg, final int msecs) {
-		if (gUtils != null && chartExists()) {
-			gUtils.setTmpMsgTimeOut(msecs);
-			if (frame.isFullScreen)
-				gUtils.tempMsg(msg, SwingConstants.SOUTH_WEST);
-			else
-				gUtils.tempMsg(msg);
-		}
-		else {
+		if (frame != null) {
+			SwingUtilities.invokeLater(() -> {
+				if (msg == null || msg.isEmpty()) {
+					frame.status.setText(ViewerFrame.STATUS_PLACEHOLDER);
+					return;
+				}
+				final Timer timer = new Timer(msecs, e -> frame.status.setText(ViewerFrame.STATUS_PLACEHOLDER));
+				timer.setRepeats(false);
+				timer.start();
+				frame.status.setText(msg);
+			});
+		} else {
 			System.out.println(msg);
 		}
 	}
@@ -1720,13 +1745,13 @@ public class Viewer3D {
 		final boolean displayProgress = frame != null && frame.managerPanel != null;
 		setSceneUpdatesEnabled(false);
 		if (displayProgress) {
-			addProgressLoad(((Collection<?>) collection).size());
+			addProgressLoad(collection.size());
 		}
 		for(final Object o : collection) {
 			incrementProgress(); // will be inaccurate if collection contains other collections
 			add(o);
 		}
-		removeProgressLoad( ((Collection<?>) collection).size());
+		removeProgressLoad(collection.size());
 		setSceneUpdatesEnabled(updateStatus);
 		validate();
 	}
@@ -2115,7 +2140,7 @@ public class Viewer3D {
 	public boolean saveSnapshot() {
 		final String filename = new SimpleDateFormat("'SNT 'yyyy-MM-dd HH-mm-ss'.png'")
 				.format(new Date());
-		final File file = new File(prefs.snapshotDir, filename);
+		final File file = new File(prefs.getSnapshotDir(), filename);
 		boolean saved = false;
 		try {
 			saved = saveSnapshot(file);
@@ -2392,6 +2417,7 @@ public class Viewer3D {
 		sb.append(bounds.getZmax()).append(");");
 		sb.append("\n");
 		System.out.println(sb.toString());
+		displayMsg("Scene details output to Console");
 	}
 
 //	/**
@@ -2405,10 +2431,65 @@ public class Viewer3D {
 //		return (chart == null) ? null : view;
 //	}
 
-	/** AWTChart adopting {@link AView} */
-	private class AChart extends SwingChart {
+	private class Debugger extends DebugGLChart3d {
 
-		private OverlayAnnotation overlayAnnotation;
+		private Frame frame;
+
+		public Debugger() {
+			super(Viewer3D.this.chart, new ViewerFactory().getUpstreamFactory(Viewer3D.this.ENGINE));
+			watchViewBounds();
+		}
+
+		public void show() {
+			final java.awt.Rectangle awtRect = Viewer3D.this.frame.getBounds();
+			open(new org.jzy3d.maths.Rectangle((int) awtRect.getWidth() / 2, (int) awtRect.getHeight() / 2));
+			for (final java.awt.Frame f : java.awt.Frame.getFrames()) {
+				if (f instanceof org.jzy3d.bridge.awt.FrameAWT && f.getTitle().equals("GL Debug")) {
+					this.frame = f;
+					f.addWindowListener(new WindowAdapter() {
+						@Override
+						public void windowClosing(final WindowEvent e) {
+							setWatchedChart(null);
+							setEnableDebugMode(false);
+						}
+					});
+				}
+			}
+		}
+
+		@SuppressWarnings("unused")
+		private Chart getDebugChart() {
+			try {
+				final java.lang.reflect.Field field = DebugGLChart3d.class.getDeclaredField("debugChart");
+				field.setAccessible(true);
+				return (Chart) field.get(this);
+			} catch (final Exception e) {
+				SNTUtils.error(e.getMessage(), e);
+			}
+			return null;
+		}
+
+		private void dispose() {
+			setWatchedChart(null);
+			if (frame != null)
+				frame.dispose();
+		}
+
+		private void setWatchedChart(final Chart chart) {
+			try {
+				final java.lang.reflect.Field field = DebugGLChart3d.class.getDeclaredField("watchedChart");
+				field.setAccessible(true);
+				field.set(this, chart);
+			} catch (final Exception e) {
+				SNTUtils.error(e.getMessage(), e);
+			}
+		}
+	}
+
+	/** AWTChart adopting {@link ViewerFactory.AView} */
+	private class AChart extends AWTNativeChart {
+
+		private final OverlayAnnotation overlayAnnotation;
 		private final Viewer3D viewer;
 
 		public AChart(final Quality quality, final Viewer3D viewer) {
@@ -2561,7 +2642,7 @@ public class Viewer3D {
 				BufferedImage.TYPE_INT_ARGB);
 			Graphics2D graphic = image.createGraphics();
 			configureText(graphic);
-			final int maxWidth = graphic.getFontMetrics().stringWidth(renderer.format(
+			final int maxWidth = graphic.getFontMetrics().stringWidth(getTickRenderer().format(
 				max)) + barWidth + 1;
 			// do we have enough space to display labels?
 			if (maxWidth > width) {
@@ -2598,6 +2679,7 @@ public class Viewer3D {
 		private static final long serialVersionUID = 1L;
 		private static final int DEF_WIDTH = 800;
 		private static final int DEF_HEIGHT = 600;
+		private static final String STATUS_PLACEHOLDER = "Press H (or F1) for Help. Press Ctrl+Shift+P for Command Palette...";
 
 		private AChart chart;
 		private Component canvas;
@@ -2605,6 +2687,7 @@ public class Viewer3D {
 		private LightController lightController;
 		private AllenCCFNavigator allenNavigator;
 		private ManagerPanel managerPanel;
+		private JLabel status;
 
 		// displays and full screen
 		private java.awt.Point loc;
@@ -2629,15 +2712,21 @@ public class Viewer3D {
 			super();
 			GuiUtils.removeIcon(this);
 			final String title = (chart.viewer.isSNTInstance()) ? " (SNT)" : " ("+ chart.viewer.getID() + ")";
-			initialize(chart, new Rectangle(width, height), "Reconstruction Viewer" +
-				title);
+			initialize(chart, new Rectangle(width, height), "Reconstruction Viewer" + title);
 			if (PlatformUtils.isLinux()) new MultiDisplayUtil(this);
-			AWTWindows.centerWindow(gConfiguration.getBounds(), this);
+			if (gConfiguration == null)
+				AWTWindows.centerWindow(this);
+			else
+				AWTWindows.centerWindow(gConfiguration.getBounds(), this);
 			//setLocationRelativeTo(null); // ensures frame will not appear in between displays on a multidisplay setup
 			if (includeManager) {
 				manager = getManager();
 				chart.viewer.managerList.selectAll();
+				manager.addKeyListener(keyController);
 				snapPanelToSide();
+			}
+			if (gUtils != null) {
+				gUtils.setParent(this);
 			}
 			toFront();
 		}
@@ -2651,10 +2740,7 @@ public class Viewer3D {
 			this.chart = chart;
 			canvas = (Component) chart.getCanvas();
 			removeAll();
-			add(canvas);
-			// doLayout();
-			revalidate();
-			// update(getGraphics());
+			initialize(chart, new Rectangle(getWidth(), getHeight()), getTitle());
 		}
 
 		public JDialog getManager() {
@@ -2668,31 +2754,36 @@ public class Viewer3D {
 				public void windowClosing(final WindowEvent e) {
 					exitRequested(managerPanel.guiUtils);
 				}
+				@Override
+				public void windowClosed(final WindowEvent e) {
+					if (managerPanel != null)
+						managerPanel.setDebuggerEnabled(false);
+				}
 			});
 			// dialog.setLocationRelativeTo(this);
 			dialog.setMinimumSize(new Dimension(dialog.getMinimumSize().width, getHeight()/2));
 			dialog.setContentPane(managerPanel);
-			attachAbortAction();
+			managerList.addKeyListener(getCmdFinderKeyAdapter());
+			chart.getCanvas().addKeyController(getCmdFinderKeyAdapter());
 			dialog.pack();
 			return dialog;
 		}
 
-		private void attachAbortAction() {
-			final KeyAdapter adapter = new KeyAdapter() {
+		private KeyAdapter getCmdFinderKeyAdapter() {
+			return new KeyAdapter() {
 				@Override
 				public void keyPressed(final KeyEvent ke) {
 					if (KeyEvent.VK_ESCAPE == ke.getKeyCode()) {
-						if (managerPanel.cmdFinder != null)
-							managerPanel.cmdFinder.setVisible(false);
+						if (cmdFinder != null)
+							cmdFinder.setVisible(false);
 						chart.viewer.abortCurrentOperation = true;
+					} else if (cmdFinder != null && KeyEvent.VK_P == ke.getKeyCode() && ke.isShiftDown()
+							&& (ke.isControlDown() || ke.isMetaDown())) {
+						cmdFinder.toggleVisibility();
 					}
 				}
 			};
-			addKeyListener(adapter);
-			managerPanel.addKeyListener(adapter);
-			chart.viewer.managerList.addKeyListener(adapter);
 		}
-
 		private void displayLightController() {
 			lightController = new LightController(this);
 			lightController.display();
@@ -2714,19 +2805,28 @@ public class Viewer3D {
 		 */
 		@Override
 		public void initialize(final Chart chart, final Rectangle bounds, final String title) {
+			final boolean firstInitialization = this.chart == null;
 			this.chart = (AChart)chart;
 			canvas = (Component) chart.getCanvas();
 			setTitle(title);
-			add(canvas);
+			BorderLayout layout = new BorderLayout();
+			setLayout(layout);
+			add(canvas, BorderLayout.CENTER);
+			add(status = new JLabel(STATUS_PLACEHOLDER), BorderLayout.SOUTH);
+			status.setFocusable(false);
+			status.setBackground(toAWTColor(chart.view().getBackgroundColor()));
+			status.setForeground(toAWTColor(chart.view().getBackgroundColor().negative()));
+			setBackground(status.getBackground());
 			pack();
 			setSize(new Dimension(bounds.width, bounds.height));
-			AWTWindows.centerWindow(this);
-			addWindowListener(new WindowAdapter() {
-				@Override
-				public void windowClosing(final WindowEvent e) {
-					exitRequested(gUtils);
-				}
-			});
+			if (firstInitialization) {
+				addWindowListener(new WindowAdapter() {
+					@Override
+					public void windowClosing(final WindowEvent e) {
+						exitRequested(gUtils);
+					}
+				});
+			}
 		}
 
 		public void disposeFrame() {
@@ -2767,9 +2867,10 @@ public class Viewer3D {
 				if (manager != null) manager.setVisible(false);
 				if (lightController != null) lightController.setVisible(false);
 				if (allenNavigator != null) allenNavigator.dialog.setVisible(false);
+				frame.status.setVisible(false);
 				setExtendedState(JFrame.MAXIMIZED_BOTH );
 				isFullScreen = true;
-				delayedMsg(300, "Press \"Esc\" to exit Full Screen", 3000); // without delay popup is not shown?
+				displayBanner("Entered Full Screen. Press Shift+F (or \"Esc\") to exit...");
 			}
 		}
 
@@ -2943,6 +3044,7 @@ public class Viewer3D {
 			retrieveAllIfNoneSelected = DEF_RETRIEVE_ALL_IF_NONE_SELECTED;
 			treeCompartmentChoice = DEF_TREE_COMPARTMENT_CHOICE;
 			setSnapshotDirectory();
+			SNTChart.setDefaultFontScale(SCALE_FACTOR);
 			if (tp.prefService == null) {
 				kc.zoomStep = DEF_ZOOM_STEP;
 				kc.rotationStep = DEF_ROTATION_STEP;
@@ -2961,6 +3063,15 @@ public class Viewer3D {
 					RecViewerPrefsCmd.DEF_SCRIPT_EXTENSION);
 		}
 
+		private File getSnapshotDir() {
+			if (snapshotDir == null)
+				snapshotDir = RecViewerPrefsCmd.DEF_SNAPSHOT_DIR;
+			final File file = new File(snapshotDir);
+			if (!file.exists() || !file.isDirectory())
+				file.mkdirs();
+			return file;
+		}
+	
 		private String getBoilerplateScript(final String ext) {
 			final HashMap<String, String> map = new HashMap<>();
 			map.put(".bsh", "BSH.bsh");
@@ -2976,8 +3087,8 @@ public class Viewer3D {
 			snapshotDir = (tp.prefService == null) ? RecViewerPrefsCmd.DEF_SNAPSHOT_DIR
 			: tp.prefService.get(RecViewerPrefsCmd.class, "snapshotDir",
 				RecViewerPrefsCmd.DEF_SNAPSHOT_DIR);
-			final File dir = new File(snapshotDir);
-			if (!dir.exists() || !dir.isDirectory()) dir.mkdirs();
+//			final File dir = new File(snapshotDir);
+//			if (!dir.exists() || !dir.isDirectory()) dir.mkdirs();
 		}
 
 		private float getSnapshotRotationAngle() {
@@ -3075,12 +3186,11 @@ public class Viewer3D {
 		private JCheckBoxMenuItem debugCheckBox;
 		private final SNTSearchableBar searchableBar;
 		private final ProgressBar progressBar;
-		private SNTCommandFinder cmdFinder;
+		private Debugger debugger;
 
 		private ManagerPanel(final GuiUtils guiUtils) {
 			super();
 			this.guiUtils = guiUtils;
-			cmdFinder = new SNTCommandFinder();
 			setLayout(new BoxLayout(this, BoxLayout.Y_AXIS));
 			searchableBar = new SNTSearchableBar(new ListSearchable(managerList));
 			searchableBar.setGuiUtils(guiUtils);
@@ -3114,16 +3224,64 @@ public class Viewer3D {
 			add(scrollPane);
 			scrollPane.revalidate();
 			progressBar = new ProgressBar();
+			progressBar.setBackground(scrollPane.getBackground());
 			add(progressBar);
 			add(searchableBar);
 			add(buttonPanel());
 			fileDropWorker = new FileDropWorker(managerList, guiUtils);
 		}
 
+		private JCheckBoxMenuItem getDebugCheckBox() {
+			debugCheckBox = new JCheckBoxMenuItem("Debug Mode", SNTUtils.isDebugMode() && debugger != null);
+			debugCheckBox.setEnabled(!isSNTInstance());
+			debugCheckBox.setIcon(IconFactory.getMenuIcon(GLYPH.STETHOSCOPE));
+			debugCheckBox.setMnemonic('d');
+			debugCheckBox.addItemListener(e -> {
+				final boolean debug = debugCheckBox.isSelected();
+				if (isSNTInstance()) {
+					sntService.getPlugin().getUI().setEnableDebugMode(debug);
+				} else {
+					SNTUtils.setDebugMode(debug);
+				}
+				if (debug) {
+					switch(ENGINE) {
+					case JOGL:
+						logGLDetails();
+						setDebuggerEnabled(debug);
+						break;
+					default:
+						SNTUtils.log("Rendering engine: " +  ENGINE.toString());
+					}
+				}
+			});
+			return debugCheckBox;
+		}
+
+		private void setDebuggerEnabled(final boolean enable ) {
+			if (enable && Engine.JOGL.equals(ENGINE)) {
+				if (debugger == null) {
+					debugger = new Debugger();
+					debugger.show();
+				} else {
+					debugger.setWatchedChart(chart);
+				}
+			} else if (debugger != null) {
+				debugger.dispose();
+				debugger = null;
+			}
+			debugCheckBox.setSelected(enable);
+			SNTUtils.setDebugMode(enable);
+		}
+
 	 	/** Updates the progress bar. */
 		public void showProgress(int value, int maximum) {
-			progressBar.addToGlobalMax(maximum);
-			progressBar.addToGlobalValue(value);
+			if (value == -1 && maximum == -1) {
+				progressBar.setIndeterminate(true);
+			} else {
+				progressBar.setIndeterminate(false);
+				progressBar.addToGlobalMax(maximum);
+				progressBar.addToGlobalValue(value);
+			}
 		}
 
 		class ProgressBar extends JProgressBar {
@@ -3131,31 +3289,18 @@ public class Viewer3D {
 			private static final long serialVersionUID = 1L;
 			private int globalValue;
 			private int globalMax;
-			private boolean loadPending;
 
 			ProgressBar() {
 				super();
 				setStringPainted(true);
 				setFocusable(false);
-				addMouseListener(new MouseAdapter() {
-					@Override
-					public void mouseClicked(final MouseEvent e) {
-						if (e.getClickCount() == 2) {
-							// dismiss. Useful as last resource in case the bar lingers around
-							reset(false);
-						}
-					}
-				});
-				reset(false);
+				reset();
 			}
 
 			private void addToGlobalValue(final int increment) {
 				globalValue = globalValue + increment;
-				if (globalValue < 0) {
-					reset(true);
-					return;
-				} else if (globalValue > globalMax) {
-					reset(false);
+				if (globalValue < 0 || globalValue > globalMax) {
+					reset();
 					return;
 				}
 				super.setValue(globalValue);
@@ -3182,35 +3327,34 @@ public class Viewer3D {
 			}
 
 			@Override
-			public void setIndeterminate(final boolean newValue) {
-				super.setString((newValue) ? "Loading..." : null);
-				super.setIndeterminate(newValue);
+			public boolean isIndeterminate() {
+			    return super.isIndeterminate() || globalMax < 0;
+			}
+	
+			@Override
+			public String getString() {
+				if (isIndeterminate())
+					return "Background task...";
+				if (globalMax == 0)
+					return " ";
+				return super.getString();
 			}
 
 			public void addToGlobalMax(final int increment) {
 				globalMax = globalMax + increment;
-				if (globalMax < 1)
-					reset(false);
-				else {
-					setIndeterminate(false);
-					SwingUtilities.invokeLater(() -> setVisible(true));
-					super.setMaximum(globalMax);
+				if (globalMax < 1) {
+					reset();
+				} else {
+					setMaximum(globalMax);
 				}
 			}
 
-			private void reset(final boolean setVisible) {
-				SwingUtilities.invokeLater(() -> setVisible(setVisible));
+			private void reset() {
 				globalValue = 0;
 				globalMax = 0;
-				super.setValue(0);
-				super.setMinimum(0);
-				super.setMaximum(0);
-				setIndeterminate(true);
-				setLoadPending(false);
-			}
-
-			private void setLoadPending(boolean b) {
-				this.loadPending = b;
+				setValue(0);
+				setMinimum(0);
+				setMaximum(0);
 			}
 		}
 
@@ -3224,13 +3368,15 @@ public class Viewer3D {
 			static final String NONE = "None";
 			static final String REBUILD = "Rebuild Scene...";
 			static final String RELOAD = "Reload Scene";
-			static final String RESET = "Reset Scene";
+			static final String RESET_VIEW = "Reset View";
 			static final String SCENE_SHORTCUTS_LIST = "Scene Shortcuts...";
 			static final String SCENE_SHORTCUTS_NOTIFICATION = "Scene Shortcuts (Notification)...";
 			static final String SCRIPT = "Script This Viewer";
 			static final String SNAPSHOT = "Take Snapshot";
 			static final String SYNC = "Sync Path Manager Changes";
 			static final String TAG = "Add Tag(s)...";
+			static final String TOGGLE_DARK_MODE = "Toggle Dark Mode";
+			static final String TOGGLE_CONTROL_PANEL= "Toggle RV Controls";
 			static final long serialVersionUID = 1L;
 			final String name;
 
@@ -3257,9 +3403,11 @@ public class Viewer3D {
 			public void actionPerformed(final ActionEvent e) {
 				switch (name) {
 				case ALL:
+					showPanelAsNeeded();
 					managerList.selectAll();
 					return;
 				case FIND:
+					showPanelAsNeeded();
 					if (searchableBar.isShowing()) {
 						searchableBar.getInstaller().closeSearchBar(searchableBar);
 					} else {
@@ -3268,14 +3416,8 @@ public class Viewer3D {
 					}
 					return;
 				case PROGRESS:
-					if (progressBar.isShowing()) {
-						progressBar.setVisible(false);
-					} else {
-						if (!progressBar.loadPending) { // indeterminate bar otherwise
-							progressBar.setIndeterminate(false);
-						}
-						progressBar.setVisible(true);
-					}
+					showPanelAsNeeded();
+					progressBar.setVisible(!progressBar.isShowing());
 					return;
 				case ENTER_FULL_SCREEN:
 					frame.enterFullScreen();
@@ -3292,6 +3434,7 @@ public class Viewer3D {
 					}
 					break;
 				case NONE:
+					showPanelAsNeeded();
 					managerList.clearSelection();
 					return;
 				case REBUILD:
@@ -3308,7 +3451,7 @@ public class Viewer3D {
 						displayMsg("Scene reloaded");
 					}
 					return;
-				case RESET:
+				case RESET_VIEW:
 					keyController.resetView();
 					return;
 				case SCENE_SHORTCUTS_LIST:
@@ -3352,6 +3495,12 @@ public class Viewer3D {
 						return; // user pressed cancel
 					managerList.applyTagToSelectedItems(tags);
 					return;
+				case TOGGLE_DARK_MODE:
+					setEnableDarkMode(!isDarkModeOn());
+					return;
+				case TOGGLE_CONTROL_PANEL:
+					toggleControlPanel();
+					return;
 				default:
 					throw new IllegalArgumentException("Unrecognized action");
 				}
@@ -3361,6 +3510,11 @@ public class Viewer3D {
 				actionPerformed(new ActionEvent(this, ActionEvent.ACTION_PERFORMED, null) {
 					private static final long serialVersionUID = 1L;
 				});
+			}
+
+			private void showPanelAsNeeded() {
+				if (frame.manager != null && !frame.manager.isVisible())
+					toggleControlPanel(); // e.g, if action called via cmdFinder
 			}
 		}
 
@@ -3375,15 +3529,9 @@ public class Viewer3D {
 			buttonPanel.add(menuButton(GLYPH.ATLAS, refBrainsMenu(), "Reference Brains"));
 			buttonPanel.add(menuButton(GLYPH.CALCULATOR, measureMenu(), "Analyze & Measure"));
 			buttonPanel.add(menuButton(GLYPH.TOOL, utilsMenu(), "Utilities"));
+			buttonPanel.add(menuButton(GLYPH.CODE, scriptingMenu(), "Scripting"));
 			buttonPanel.add(menuButton(GLYPH.COG, prefsMenu(), "Settings"));
-			final JButton cFinder = new JButton(IconFactory.getButtonIcon(IconFactory.GLYPH.SEARCH));
-			cFinder.setToolTipText("Search for commands");
-			cFinder.addActionListener(e -> {
-				cmdFinder.setLocationRelativeTo(cFinder);
-				cmdFinder.toggleVisibility();
-			});
-			buttonPanel.add(cFinder);
-
+			buttonPanel.add(cmdFinder.getButton());
 			return buttonPanel;
 		}
 
@@ -3395,7 +3543,7 @@ public class Viewer3D {
 		private JButton menuButton(final GLYPH glyph, final JPopupMenu menu, final String tooltipMsg) {
 			final JButton button = new JButton(IconFactory.getButtonIcon(glyph));
 			button.setToolTipText(tooltipMsg);
-			registerMenuInCmdFinder(menu, tooltipMsg);
+			registerMenuInCmdFinder(menu, new ArrayList<>(Arrays.asList(tooltipMsg)));
 			button.addActionListener(e -> menu.show(button, button.getWidth() / 2, button.getHeight() / 2));
 			return button;
 		}
@@ -3429,7 +3577,7 @@ public class Viewer3D {
 			sceneMenu.add(fullScreen);
 			sceneMenu.addSeparator();
 
-			final JMenuItem reset = new JMenuItem(new Action(Action.RESET, KeyEvent.VK_R, false, false));
+			final JMenuItem reset = new JMenuItem(new Action(Action.RESET_VIEW, KeyEvent.VK_R, false, false));
 			reset.setIcon(IconFactory.getMenuIcon(GLYPH.BROOM));
 			sceneMenu.add(reset);
 			final JMenuItem reload = new JMenuItem(new Action(Action.RELOAD, KeyEvent.VK_R, false, true));
@@ -3485,22 +3633,29 @@ public class Viewer3D {
 			return sceneMenu;
 		}
 
-		private void registerMenuInCmdFinder(final JPopupMenu menu, final String description) {
+		private void registerMenuInCmdFinder(final JPopupMenu menu, final List<String> path) {
 			for (final Component component : menu.getComponents()) {
-				if (component instanceof JMenu)
-					registerMenuInCmdFinder((JMenu)component, description + ">" + ((JMenu)component).getText());
+				if (component instanceof JMenu) {
+					final List<String> newPath = new ArrayList<>(path);
+					final String menuText = ((JMenu)component).getText();
+					if (menuText != null) newPath.add(menuText);
+					registerMenuInCmdFinder((JMenu)component, newPath);
+				}
 				else if (component instanceof AbstractButton)
-					cmdFinder.register((AbstractButton)component, description);
+					cmdFinder.register((AbstractButton)component, path);
 			}
 		}
 	
-		private void registerMenuInCmdFinder(final JMenu menu, final String description) {
+		private void registerMenuInCmdFinder(final JMenu menu, final List<String> path) {
 			for (final Component component : menu.getMenuComponents()) {
 				if (component instanceof JMenu) {
-					registerMenuInCmdFinder((JMenu)component, description + ">" + ((JMenu)component).getText());
+					final List<String> newPath = new ArrayList<>(path);
+					final String menuText = ((JMenu)component).getText();
+					if (menuText != null) newPath.add(menuText);
+					registerMenuInCmdFinder((JMenu)component, newPath);
 				}
 				else if (component instanceof JMenuItem) {
-					cmdFinder.register((JMenuItem)component, description);
+					cmdFinder.register((JMenuItem)component, path);
 				}
 
 			}
@@ -3527,6 +3682,11 @@ public class Viewer3D {
 		}
 
 		private JPopupMenu popupMenu() {
+			final JMenuItem renderIcons = new JCheckBoxMenuItem("Label Categories",
+					IconFactory.getMenuIcon(GLYPH.MARKER));
+			renderIcons.addItemListener(e -> {
+				managerList.setIconsVisible((renderIcons.isSelected()));
+			});
 			final JMenuItem sort = new JMenuItem("Sort List", IconFactory.getMenuIcon(GLYPH.SORT));
 			sort.addActionListener(e -> {
 				if (noLoadedItemsGuiError()) {
@@ -3536,24 +3696,31 @@ public class Viewer3D {
 						"Sort List?")) {
 					return;
 				}
-				final List<String> checkedLabels = getLabelsCheckedInManager();
-				try {
-					managerList.setValueIsAdjusting(true);
-					managerList.model.removeAllElements();
-					plottedTrees.keySet().forEach(k -> {
-						managerList.model.addElement(k);
-					});
-					plottedObjs.keySet().forEach(k -> {
-						managerList.model.addElement(k);
-					});
-					plottedAnnotations.keySet().forEach(k -> {
-						managerList.model.addElement(k);
-					});
-					managerList.model.addElement(CheckBoxList.ALL_ENTRY);
-				} finally {
-					managerList.setValueIsAdjusting(false);
-				}
-				managerList.addCheckBoxListSelectedValues(checkedLabels.toArray());
+				final List<Integer> displayedIndices = new ArrayList<>();
+				managerList.model.setListenersEnabled(false);
+				managerList.setValueIsAdjusting(true);
+				managerList.model.removeAllElements();
+				plottedTrees.forEach((k, v) -> {
+					if (v.isDisplayed())
+						displayedIndices.add(managerList.model.getSize());
+					managerList.model.addElement(k);
+				});
+				plottedObjs.forEach((k, v) -> {
+					if (v.isDisplayed())
+						displayedIndices.add(managerList.model.getSize());
+					managerList.model.addElement(k);
+				});
+				plottedAnnotations.forEach((k, v) -> {
+					if (v.getDrawable().isDisplayed())
+						displayedIndices.add(managerList.model.getSize());
+					managerList.model.addElement(k);
+				});
+				managerList.model.addElement(CheckBoxList.ALL_ENTRY);
+				managerList.setCheckBoxListSelectedIndices(displayedIndices.stream().mapToInt(Integer::intValue).toArray());
+				managerList.setValueIsAdjusting(false);
+				managerList.setIconsVisible(true);
+				renderIcons.setSelected(true);
+				managerList.model.setListenersEnabled(true);
 			});
 
 			final JMenuItem addTag = new JMenuItem(new Action(Action.TAG, KeyEvent.VK_T, true, true));
@@ -3571,12 +3738,7 @@ public class Viewer3D {
 					managerList.removeTagsFromSelectedItems();
 				}
 			});
-			final JMenuItem renderIcons = new JCheckBoxMenuItem("Label Categories",
-					IconFactory.getMenuIcon(GLYPH.MARKER));
-			renderIcons.addItemListener(e -> {
-				managerList.setIconsVisible((renderIcons.isSelected()));
-			});
-	
+
 			// Select menu
 			final JMenu selectMenu = new JMenu("Select");
 			selectMenu.setIcon(IconFactory.getMenuIcon(GLYPH.POINTER));
@@ -3686,15 +3848,17 @@ public class Viewer3D {
 			pMenu.add(wipeTags);
 			pMenu.add(renderIcons);
 			pMenu.addSeparator();
-			final JMenuItem find = new JMenuItem(new Action(Action.FIND, KeyEvent.VK_F, true, false));
-			find.setIcon(IconFactory.getMenuIcon(GLYPH.BINOCULARS));
-			pMenu.add(find);
-			pMenu.add(new JMenuItem(new Action(Action.PROGRESS)));
+			JMenuItem jmi = new JMenuItem(new Action(Action.FIND, KeyEvent.VK_F, true, false));
+			jmi.setIcon(IconFactory.getMenuIcon(GLYPH.BINOCULARS));
+			pMenu.add(jmi);
+			jmi = new JMenuItem(new Action(Action.PROGRESS));
+			jmi.setIcon(IconFactory.getMenuIcon(GLYPH.SPINNER));
+			pMenu.add(jmi);
 			pMenu.addSeparator();
 			pMenu.add(sort);
 			pMenu.addSeparator();
 			pMenu.add(remove);
-			registerMenuInCmdFinder(pMenu, "Contextual Menu");
+			registerMenuInCmdFinder(pMenu, new ArrayList<>(Arrays.asList("Control Panel Contextual Menu")));
 			return pMenu;
 		}
 
@@ -3748,9 +3912,9 @@ public class Viewer3D {
 				managerList.setValueIsAdjusting(true);
 				for (int i = 0; i < indices.length; i++) {
 					if (display)
-						managerList.addCheckBoxListSelectedIndex(i);
+						managerList.addCheckBoxListSelectedIndex(indices[i]);
 					else
-						managerList.removeCheckBoxListSelectedIndex(i);
+						managerList.removeCheckBoxListSelectedIndex(indices[i]);
 				}
 				managerList.setValueIsAdjusting(false);
 			});
@@ -3789,9 +3953,9 @@ public class Viewer3D {
 				.next().tree;
 			final List<Tree> trees = getSelectedTrees(false);
 			if (trees == null) return null;
-			if (trees.isEmpty() || trees.size() > 1) {
+			if (trees.size() != 1) {
 				guiUtils.error(
-					"This command requires a single recontruction to be selected.");
+					"This command requires a single reconstruction to be selected.");
 				return null;
 			}
 			return trees.get(0);
@@ -3800,7 +3964,7 @@ public class Viewer3D {
 		private Tree getSingleSelectionTreeWithPromptForType() {
 			Tree tree = getSingleSelectionTree();
 			if (tree == null) return null;
-			final Set<Integer> types = tree.getSWCTypes();
+			final Set<Integer> types = tree.getSWCTypes(false);
 			if (types.size() == 1)
 				return tree;
 			final String compartment = guiUtils.getChoice("Compartment:", "Which Neuronal Processes?",
@@ -3825,7 +3989,11 @@ public class Viewer3D {
 	
 		private List<Tree> getSelectedTrees(final boolean promptForAllIfNone) {
 			final List<String> keys = getSelectedKeys(plottedTrees, "reconstructions", promptForAllIfNone);
-			if (keys == null) return null;
+			if (keys == null) return null; // user pressed cancel on prompt
+			if (keys.isEmpty()) { // a selection existed but it did not contain plottedTrees
+				guiUtils.error("There are no selected reconstructions.");
+				return null;
+			}
 			final List<Tree> trees = new ArrayList<>();
 			keys.forEach( k -> {
 				final ShapeTree sTree = plottedTrees.get(k);
@@ -3856,8 +4024,8 @@ public class Viewer3D {
 				selectedKeys.add(TagUtils.removeAllTags(sv.toString()));
 			});
 			final List<String> allKeys = new ArrayList<>(map.keySet());
-			if ((promptForAllIfNone && map.size() == 1) || (selectedKeys
-				.size() == 1 && selectedKeys.get(0) == CheckBoxList.ALL_ENTRY))
+			if ((promptForAllIfNone && map.size() == 1)
+					|| (selectedKeys.size() == 1 && CheckBoxList.ALL_ENTRY.toString().equals(selectedKeys.get(0))))
 				return allKeys;
 			if (promptForAllIfNone && selectedKeys.isEmpty()) {
 				checkRetrieveAllOptions(mapDescriptor);
@@ -3878,24 +4046,32 @@ public class Viewer3D {
 			prefs.nagUserOnRetrieveAll = !options[1];
 		}
 
+		@SuppressWarnings("deprecation")
 		private JPopupMenu measureMenu() {
 			final JPopupMenu measureMenu = new JPopupMenu();
-			addSeparator(measureMenu, "Tabular Results:");
-			JMenuItem mi = new JMenuItem("Measure...", IconFactory.getMenuIcon(GLYPH.TABLE));
-			mi.setToolTipText("Computes detailed metrics from single cells");
+			GuiUtils.addSeparator(measureMenu, "Tabular Results:");
+			JMenuItem mi = GuiUtils.MenuItems.measureOptions();
 			mi.addActionListener(e -> {
-				final List<Tree> trees = getSelectedTrees();
+				List<Tree> trees = getSelectedTrees();
 				if (trees == null || trees.isEmpty()) return;
-				final Map<String, Object> inputs = new HashMap<>();
-				inputs.put("trees", trees);
 				initTable();
-				inputs.put("table", table);
-				inputs.put("calledFromPathManagerUI", false);
-				runCmd(AnalyzerCmd.class, inputs, CmdWorker.DO_NOTHING, false, true);
+				if ((e.getModifiers() & ActionEvent.SHIFT_MASK) != 0 || (e.getModifiers() & ActionEvent.ALT_MASK) != 0) {
+					final Map<String, Object> inputs = new HashMap<>();
+					inputs.put("trees", trees);
+					inputs.put("table", table);
+					inputs.put("calledFromPathManagerUI", false);
+					runCmd(AnalyzerCmd.class, inputs, CmdWorker.DO_NOTHING, false, true);
+				} else if (MeasureUI.instances != null && !MeasureUI.instances.isEmpty()) {
+					guiUtils.error("A Measurements prompt seems to be already open.");
+					trees = null;
+				} else {
+					final MeasureUI measureUI = new MeasureUI(trees);
+					measureUI.setTable(table);
+					measureUI.setVisible(true);
+				}
 			});
 			measureMenu.add(mi);
-			mi = new JMenuItem("Quick Measurements", IconFactory.getMenuIcon(GLYPH.ROCKET));
-			mi.setToolTipText("Runs \"Measure...\" on a pre-set list of metrics");
+			mi = GuiUtils.MenuItems.measureQuick();
 			mi.addActionListener(e -> {
 				final List<Tree> trees = getSelectedTrees();
 				if (trees == null || trees.isEmpty()) return;
@@ -3908,15 +4084,9 @@ public class Viewer3D {
 				});
 			});
 			measureMenu.add(mi);
-			mi = new JMenuItem("Save Tables & Analysis Plots...", IconFactory.getMenuIcon(GLYPH.SAVE));
-			mi.setToolTipText("Save all tables, plots, and charts currently open.");
-			mi.addActionListener(e -> {
-				runCmd(SaveMeasurementsCmd.class, null, CmdWorker.DO_NOTHING, false, true);
-			});
-			measureMenu.add(mi);
-			addSeparator(measureMenu, "Distribution Analysis:");
+			GuiUtils.addSeparator(measureMenu, "Distribution Analysis:");
 			mi = new JMenuItem("Branch Properties...", IconFactory.getMenuIcon(GLYPH.CHART));
-			mi.setToolTipText("Computes metrics from all the branches of selected trees");
+			mi.setToolTipText("Computes distributions of metrics from all the branches of selected trees");
 			mi.addActionListener(e -> {
 				final List<Tree> trees = getSelectedTrees();
 				if (trees == null || trees.isEmpty()) return;
@@ -3927,7 +4097,7 @@ public class Viewer3D {
 			});
 			measureMenu.add(mi);
 			mi = new JMenuItem("Cell Properties...", IconFactory.getMenuIcon(GLYPH.CHART));
-			mi.setToolTipText("Computes metrics from individual cells");
+			mi.setToolTipText("Computes distributions of metrics from individual cells");
 			mi.addActionListener(e -> {
 				final List<Tree> trees = getSelectedTrees();
 				if (trees == null || trees.isEmpty()) return;
@@ -3937,7 +4107,7 @@ public class Viewer3D {
 				runCmd(DistributionCPCmd.class, inputs, CmdWorker.DO_NOTHING, false, true);
 			});
 			measureMenu.add(mi);
-			addSeparator(measureMenu, "Single-Cell Analysis:");
+			GuiUtils.addSeparator(measureMenu, "Specialized Analysis:");
 			mi = new JMenuItem("Brain Area Analysis...", IconFactory.getMenuIcon(GLYPH.BRAIN));
 			mi.addActionListener(e -> {
 				final Tree tree = getSingleSelectionTree();
@@ -3947,7 +4117,44 @@ public class Viewer3D {
 				runCmd(BrainAnnotationCmd.class, inputs, CmdWorker.DO_NOTHING, false, true);
 			});
 			measureMenu.add(mi);
-			mi = new JMenuItem("Create Dendrogram...", IconFactory.getMenuIcon(GLYPH.DIAGRAM));
+			final JMenuItem convexHullMenuItem = GuiUtils.MenuItems.convexHull();
+			convexHullMenuItem.addActionListener(e -> {
+				final List<Tree> trees = getSelectedTrees();
+				if (trees == null || trees.isEmpty()) return;
+				final Map<String, Object> inputs = new HashMap<>();
+				inputs.put("trees", trees);
+				inputs.put("calledFromRecViewerInstance", true);
+				initTable();
+				inputs.put("table", table);
+				runCmd(ConvexHullCmd.class, inputs, CmdWorker.DO_NOTHING, true, true);
+			});
+			measureMenu.add(convexHullMenuItem);
+			mi = GuiUtils.MenuItems.shollAnalysis();
+			mi.addActionListener(e -> {
+				final List<Tree> trees = getSelectedTrees();
+				if (trees == null || trees.isEmpty()) return;
+				final Map<String, Object> input = new HashMap<>();
+				if (trees.size() == 1) {
+					input.put("snt", null);
+					input.put("tree", trees.get(0));
+					runCmd(ShollAnalysisTreeCmd.class, input, CmdWorker.DO_NOTHING, false, false);
+				} else {
+					input.put("treeList", trees);
+					runCmd(ShollAnalysisBulkTreeCmd.class, input, CmdWorker.DO_NOTHING, true, true);
+				}
+			});
+			measureMenu.add(mi);
+			mi = GuiUtils.MenuItems.strahlerAnalysis();
+			mi.addActionListener(e -> {
+				final List<Tree> trees = getSelectedTrees();
+				if (trees == null || trees.isEmpty()) return;
+				final HashMap<String, Object> inputs = new HashMap<>();
+				inputs.put("trees", trees);
+				runCmd(StrahlerCmd.class, inputs, CmdWorker.DO_NOTHING, false, true);
+			});
+			measureMenu.add(mi);
+			GuiUtils.addSeparator(measureMenu, "Graph-based Analysis:");
+			mi = GuiUtils.MenuItems.createDendrogram();
 			mi.addActionListener(e -> {
 				final Tree tree = getSingleSelectionTreeWithPromptForType();
 				if (tree == null) return;
@@ -3956,38 +4163,6 @@ public class Viewer3D {
 				runCmd(GraphGeneratorCmd.class, inputs, CmdWorker.DO_NOTHING, false, true);
 			});
 			measureMenu.add(mi);
-			final JMenuItem convexHullMenuItem = new JMenuItem("Convex Hull...",
-					IconFactory.getMenuIcon(IconFactory.GLYPH.GEM));
-			convexHullMenuItem.addActionListener(e -> {
-				final Tree tree = getSingleSelectionTree();
-				if (tree == null) return;
-				final Map<String, Object> inputs = new HashMap<>();
-				inputs.put("tree", tree);
-				initTable();
-				inputs.put("table", table);
-				runCmd(ConvexHullCmd.class, inputs, CmdWorker.DO_NOTHING, true, true);
-			});
-			measureMenu.add(convexHullMenuItem);
-			mi = new JMenuItem("Sholl Analysis...", IconFactory.getMenuIcon(GLYPH.BULLSEYE));
-			mi.addActionListener(e -> {
-				final Tree tree = getSingleSelectionTree();
-				if (tree == null) return;
-				final Map<String, Object> input = new HashMap<>();
-				input.put("snt", null);
-				input.put("tree", tree);
-				runCmd(ShollAnalysisTreeCmd.class, input, CmdWorker.DO_NOTHING, false, false);
-			});
-			measureMenu.add(mi);
-			mi = new JMenuItem("Strahler Analysis...", IconFactory.getMenuIcon(GLYPH.BRANCH_CODE));
-			mi.addActionListener(e -> {
-				final Tree tree = getSingleSelectionTreeWithPromptForType();
-				if (tree == null) return;
-				final StrahlerCmd sa = new StrahlerCmd(tree);
-				sa.setContext(context);
-				SwingUtilities.invokeLater(() -> sa.run());
-			});
-			measureMenu.add(mi);
-			addSeparator(measureMenu, "Annotation Graphs:");
 			mi = new JMenuItem("Create Annotation Graph...", IconFactory.getMenuIcon(GLYPH.BRAIN));
 			mi.addActionListener(e -> {
 				final List<Tree> trees = getSelectedTrees();
@@ -3997,6 +4172,13 @@ public class Viewer3D {
 				runCmd(AnnotationGraphGeneratorCmd.class, inputs, CmdWorker.DO_NOTHING, false, true);
 			});
 			measureMenu.add(mi);
+			GuiUtils.addSeparator(measureMenu, "Data Export & Utilities:");
+			mi = GuiUtils.MenuItems.saveTablesAndPlots(GLYPH.SAVE);
+			mi.addActionListener(e -> {
+				runCmd(SaveMeasurementsCmd.class, null, CmdWorker.DO_NOTHING, false, true);
+			});
+			measureMenu.add(mi);
+			measureMenu.add(guiUtils.combineChartsMenuItem());
 			return measureMenu;
 		}
 
@@ -4005,7 +4187,7 @@ public class Viewer3D {
 		}
 
 		private void addCustomizeMeshCommands(final JPopupMenu menu) {
-			addSeparator(menu, "Customize:");
+			GuiUtils.addSeparator(menu, "Customize:");
 			JMenuItem mi = new JMenuItem("All Parameters...", IconFactory.getMenuIcon(GLYPH.SLIDERS));
 			mi.addActionListener(e -> {
 				final List<String> keys = getSelectedMeshes(true);
@@ -4055,7 +4237,7 @@ public class Viewer3D {
 				final List<String> keys = getSelectedMeshes(true);
 				if (keys == null) return;
 				final java.awt.Color c = guiUtils.getColor("Mesh(es) Color",
-					java.awt.Color.WHITE, "HSB");
+					java.awt.Color.WHITE, (String[])null);
 				if (c == null) {
 					return; // user pressed cancel
 				}
@@ -4174,7 +4356,7 @@ public class Viewer3D {
 				if (keys == null) return;
 				final Map<String, Object> inputs = new HashMap<>();
 				inputs.put("treeMappingLabels", keys);
-				runCmd(ColorMapReconstructionCmd.class, inputs, CmdWorker.DO_NOTHING);
+				runCmd(ColorMapReconstructionCmd.class, inputs, CmdWorker.DO_NOTHING, true, false);
 			});
 			ccMenu.add(mi);
 			mi = new JMenuItem("Group of Cells...");
@@ -4183,7 +4365,7 @@ public class Viewer3D {
 				if (keys == null) return;
 				final Map<String, Object> inputs = new HashMap<>();
 				inputs.put("multiTreeMappingLabels", keys);
-				runCmd(ColorMapReconstructionCmd.class, inputs, CmdWorker.DO_NOTHING);
+				runCmd(ColorMapReconstructionCmd.class, inputs, CmdWorker.DO_NOTHING, true, false);
 			});
 			ccMenu.add(mi);
 			mi = new JMenuItem("Color Each Cell Uniquely");
@@ -4232,17 +4414,17 @@ public class Viewer3D {
 				if (keys == null) return;
 				final Map<String, Object> inputs = new HashMap<>();
 				inputs.put("treeLabels", keys);
-				runCmd(TranslateReconstructionsCmd.class, inputs, CmdWorker.DO_NOTHING);
+				runCmd(TranslateReconstructionsCmd.class, inputs, CmdWorker.DO_NOTHING, true, false);
 			});
 			menu.add(mi);
 		}
 
 		private JPopupMenu utilsMenu() {
 			final JPopupMenu utilsMenu = new JPopupMenu();
-			addSeparator(utilsMenu, "Utilities:");
+			GuiUtils.addSeparator(utilsMenu, "Utilities:");
 			JMenuItem mi = new JMenuItem("Annotation Label...", IconFactory.getMenuIcon(GLYPH.PEN));
 			mi.addActionListener(e -> {
-				runCmd(AddTextAnnotationCmd.class, null, CmdWorker.DO_NOTHING);
+				runCmd(AddTextAnnotationCmd.class, null, CmdWorker.DO_NOTHING, false, false);
 			});
 			utilsMenu.add(mi);
 			utilsMenu.add(legendMenu());
@@ -4254,11 +4436,13 @@ public class Viewer3D {
 				frame.displayLightController();
 			});
 			utilsMenu.add(light);
-
-			addSeparator(utilsMenu, "Actions:");
-			final JMenuItem log = new JMenuItem(new Action(Action.LOG, KeyEvent.VK_L, false, false));
-			log.setIcon(IconFactory.getMenuIcon(GLYPH.STREAM));
-			utilsMenu.add(log);
+			final JMenuItem dark = new JMenuItem(new Action(Action.TOGGLE_DARK_MODE, KeyEvent.VK_D, false, false));
+			dark.setIcon(IconFactory.getMenuIcon(GLYPH.SUN));
+			utilsMenu.add(dark);
+			GuiUtils.addSeparator(utilsMenu, "Actions:");
+			final JMenuItem hide = new JMenuItem(new Action(Action.TOGGLE_CONTROL_PANEL, KeyEvent.VK_C, false, true));
+			hide.setIcon(IconFactory.getMenuIcon(GLYPH.EYE_SLASH));
+			utilsMenu.add(hide);
 			mi = new JMenuItem("Record Rotation", IconFactory.getMenuIcon(GLYPH.VIDEO));
 			mi.addActionListener(e -> {
 				SwingUtilities.invokeLater(() -> {
@@ -4274,62 +4458,50 @@ public class Viewer3D {
 			final JMenuItem reveal = new JMenuItem("Show Snapshot Directory", IconFactory.getMenuIcon(GLYPH.OPEN_FOLDER));
 			reveal.addActionListener(e -> {
 				try {
-					final File file = new File(prefs.snapshotDir);
-					file.mkdirs();
-					Desktop.getDesktop().open(file); // TODO: Move to java9: Desktop.getDesktop().browseFileDirectory(file);
-				} catch (final NullPointerException | IllegalArgumentException | IOException iae) {
+					guiUtils.showDirectory(prefs.getSnapshotDir());
+				} catch (final Exception ignored) {
 					guiUtils.error("Snapshot directory does not seem to be accessible.");
 				}
 			});
 			utilsMenu.add(reveal);
-	
-			addSeparator(utilsMenu, "Scripting:");
-			final JMenuItem script = new JMenuItem(new Action(Action.SCRIPT, KeyEvent.VK_OPEN_BRACKET, false, false));
-			script.setIcon(IconFactory.getMenuIcon(GLYPH.CODE));
-			utilsMenu.add(script);
-			mi = new JMenuItem("Script This Viewer In...");
-			mi.addActionListener(e -> runScriptEditor(null));
-			utilsMenu.add(mi);
 
-			addSeparator(utilsMenu, "Resources:");
+			GuiUtils.addSeparator(utilsMenu, "Resources:");
 			final JMenu helpMenu = GuiUtils.helpMenu();
 			helpMenu.setIcon( IconFactory.getMenuIcon(GLYPH.QUESTION));
-			utilsMenu.add(helpMenu.getItem(0));
-			utilsMenu.add(helpMenu.getItem(helpMenu.getItemCount()-1));
 			utilsMenu.add(helpMenu);
 			return utilsMenu;
 		}
 
+		private JPopupMenu scriptingMenu() {
+			final JPopupMenu scriptMenu = new JPopupMenu();
+			GuiUtils.addSeparator(scriptMenu, "New Script:");
+			JMenuItem mi = new JMenuItem(new Action(Action.SCRIPT, KeyEvent.VK_OPEN_BRACKET, false, false));
+			mi.setIcon(IconFactory.getMenuIcon(GLYPH.CODE));
+			scriptMenu.add(mi);
+			mi = new JMenuItem("Script This Viewer In...", IconFactory.getMenuIcon(GLYPH.CODE));
+			mi.addActionListener(e -> runScriptEditor(null));
+			scriptMenu.add(mi);
+			GuiUtils.addSeparator(scriptMenu, "Record:");
+			final JMenuItem log = new JMenuItem(new Action(Action.LOG, KeyEvent.VK_L, false, false));
+			log.setIcon(IconFactory.getMenuIcon(GLYPH.STREAM));
+			scriptMenu.add(log);
+			GuiUtils.addSeparator(scriptMenu, "Resources:");
+			scriptMenu.add(GuiUtils.MenuItems.devResourceMain());
+			scriptMenu.add(GuiUtils.MenuItems.devResourceNotebooks());
+			scriptMenu.add(GuiUtils.MenuItems.devResourceAPI());
+			return scriptMenu;
+		}
+
 		private JPopupMenu prefsMenu() {
 			final JPopupMenu prefsMenu = new JPopupMenu();
-			addSeparator(prefsMenu, "Keyboard & Mouse Sensitivity:");
+			GuiUtils.addSeparator(prefsMenu, "Keyboard & Mouse Sensitivity:");
 			prefsMenu.add(panMenu());
 			prefsMenu.add(zoomMenu());
 			prefsMenu.add(rotationMenu());
 
-			addSeparator(prefsMenu, "Advanced Settings:");
-			final JMenuItem jcbmi = new JCheckBoxMenuItem("Debug Mode", SNTUtils.isDebugMode());
-			jcbmi.setEnabled(!isSNTInstance());
-			jcbmi.setIcon(IconFactory.getMenuIcon(GLYPH.STETHOSCOPE));
-			jcbmi.setMnemonic('d');
-			jcbmi.addItemListener(e -> {
-				final boolean debug = jcbmi.isSelected();
-				if (isSNTInstance()) {
-					sntService.getPlugin().getUI().setEnableDebugMode(debug);
-				} else {
-					SNTUtils.setDebugMode(debug);
-				}
-				if (debug) {
-					switch(ENGINE) {
-					case JOGL:
-						logGLDetails();
-						break;
-					default:
-						SNTUtils.log("Rendering engine: " +  ENGINE.toString());
-					}
-				}
-			});
-			prefsMenu.add(jcbmi);
+			GuiUtils.addSeparator(prefsMenu, "Advanced Settings:");
+
+			prefsMenu.add(getDebugCheckBox());
 			if (ENGINE == Engine.JOGL) {
 				final JMenuItem  jcbmi2= new JCheckBoxMenuItem("Enable Hardware Acceleration", Settings.getInstance().isHardwareAccelerated());
 				//jcbmi2.setEnabled(!isSNTInstance());
@@ -4341,7 +4513,7 @@ public class Viewer3D {
 				});
 				prefsMenu.add(jcbmi2);
 			}
-			addSeparator(prefsMenu, "Other:");
+			GuiUtils.addSeparator(prefsMenu, "Other:");
 			final JMenuItem mi = new JMenuItem("Global Preferences...", IconFactory.getMenuIcon(GLYPH.COGS));
 			mi.addActionListener(e -> {
 				runCmd(RecViewerPrefsCmd.class, null, CmdWorker.RELOAD_PREFS, true, false);
@@ -4429,8 +4601,7 @@ public class Viewer3D {
 
 			@Override
 			protected String doInBackground() {
-				final File rootDir = new File(prefs.snapshotDir +
-					File.separator + "SNTrecordings");
+				final File rootDir = new File(prefs.getSnapshotDir(), "SNTrecordings" + File.separator);
 				if (!rootDir.exists()) rootDir.mkdirs();
 				final int dirId = rootDir.list((current, name) -> new File(current,
 					name).isDirectory() && name.startsWith("recording")).length + 1;
@@ -4476,8 +4647,8 @@ public class Viewer3D {
 
 		private JPopupMenu treesMenu() {
 			final JPopupMenu tracesMenu = new JPopupMenu();
-			addSeparator(tracesMenu, "Add:");
-			JMenuItem mi = new JMenuItem("Import File...", IconFactory.getMenuIcon(
+			GuiUtils.addSeparator(tracesMenu, "Add:");
+			JMenuItem mi = new JMenuItem("Load File...", IconFactory.getMenuIcon(
 				GLYPH.IMPORT));
 			mi.setMnemonic('f');
 			mi.addActionListener(e -> {
@@ -4486,7 +4657,7 @@ public class Viewer3D {
 				runImportCmd(LoadReconstructionCmd.class, inputs);
 			});
 			tracesMenu.add(mi);
-			mi = new JMenuItem("Import Directory...", IconFactory.getMenuIcon(
+			mi = new JMenuItem("Load Directory...", IconFactory.getMenuIcon(
 				GLYPH.FOLDER));
 			mi.addActionListener(e -> {
 				final Map<String, Object> inputs = new HashMap<>();
@@ -4495,7 +4666,7 @@ public class Viewer3D {
 			});
 			tracesMenu.add(mi);
 
-			mi = new JMenuItem("Import & Compare Groups...", IconFactory.getMenuIcon(GLYPH.MAGIC));
+			mi = new JMenuItem("Load & Compare Groups...", IconFactory.getMenuIcon(GLYPH.MAGIC));
 			mi.addActionListener(e -> {
 				runImportCmd(GroupAnalyzerCmd.class, null);
 			});
@@ -4533,10 +4704,10 @@ public class Viewer3D {
 			});
 			remoteMenu.add(mi);
 
-			addSeparator(tracesMenu, "Customize & Adjust:");
+			GuiUtils.addSeparator(tracesMenu, "Customize & Adjust:");
 			addCustomizeTreeCommands(tracesMenu);
 
-			addSeparator(tracesMenu, "Remove:");
+			GuiUtils.addSeparator(tracesMenu, "Remove:");
 			mi = new JMenuItem("Remove Selected...", IconFactory.getMenuIcon(
 				GLYPH.DELETE));
 			mi.addActionListener(e -> {
@@ -4570,24 +4741,24 @@ public class Viewer3D {
 		}
 
 		private JMenuItem loadDemoMenuItem() {
-			final JMenuItem mi = new JMenuItem("Import Demo(s)...", IconFactory.getMenuIcon(GLYPH.GRADUATION_CAP));
+			final JMenuItem mi = new JMenuItem("Load Demo(s)...", IconFactory.getMenuIcon(GLYPH.WIZARD));
 			mi.addActionListener(e -> {
 				final String[] choices = new String[3];
 				choices[0] = "Mouse Pyramidal neurons (CCF annotated)";
 				choices[1] = "Drosophila OP neuron (3D)";
-				choices[2] = "L-Systems Fractal (2D)";
+				choices[2] = "L-systems fractal (2D)";
 				final String choice = guiUtils.getChoice("Which dataset?", "Load Demo Dataset", choices, choices[0]);
 				if (choice == null) {
 					return;
 				}
 				try {
-					if (choice == choices[0]) {
+					if (choice.equals(choices[0])) {
 						addTrees(sntService.demoTrees(), "unique");
-					} else if (choice == choices[1]) {
+					} else if (choice.equals(choices[1])) {
 						final Tree tree = sntService.demoTree("op1");
 						tree.setColor("red");
 						addTreeInternal(tree);
-					} else if (choice == choices[2]) {
+					} else if (choice.equals(choices[2])) {
 						final Tree tree = sntService.demoTree("fractal");
 						tree.setColor("magenta");
 						addTreeInternal(tree);
@@ -4604,14 +4775,14 @@ public class Viewer3D {
 
 		private JMenu legendMenu() {
 			// Legend Menu
-			final JMenu legendMenu = new JMenu("Color Legends");
+			final JMenu legendMenu = new JMenu("Color Coding Legends");
 			legendMenu.setIcon(IconFactory.getMenuIcon(GLYPH.COLOR2));
 			JMenuItem mi = new JMenuItem("Add...", IconFactory.getMenuIcon(GLYPH.PLUS));
 			mi.addActionListener(e -> {
 				final Map<String, Object> inputs = new HashMap<>();
 				inputs.put("treeMappingLabels", null);
 				inputs.put("multiTreeMappingLabels", null);
-				runCmd(ColorMapReconstructionCmd.class, inputs, CmdWorker.DO_NOTHING);
+				runCmd(ColorMapReconstructionCmd.class, inputs, CmdWorker.DO_NOTHING, true, false);
 			});
 			legendMenu.add(mi);
 			mi = new JMenuItem("Edit Last...", IconFactory.getMenuIcon(GLYPH.SLIDERS));
@@ -4675,22 +4846,16 @@ public class Viewer3D {
 			return legendMenu;
 		}
 
-		private void addSeparator(final JPopupMenu menu, final String header) {
-			final JLabel label = GuiUtils.leftAlignedLabel(header, false);
-			if (menu.getComponentCount() > 1) menu.addSeparator();
-			menu.add(label);
-		}
-
 		private JPopupMenu meshMenu() {
 			final JPopupMenu meshMenu = new JPopupMenu();
-			addSeparator(meshMenu, "Add:");
-			JMenuItem mi = new JMenuItem("Import OBJ File(s)...", IconFactory
+			GuiUtils.addSeparator(meshMenu, "Add:");
+			JMenuItem mi = new JMenuItem("Load OBJ File(s)...", IconFactory
 				.getMenuIcon(GLYPH.IMPORT));
 			mi.addActionListener(e -> runImportCmd(LoadObjCmd.class, null)); // LoadObjCmd will call validate()
 			meshMenu.add(mi);
 			addCustomizeMeshCommands(meshMenu);
 
-			addSeparator(meshMenu, "Remove:");
+			GuiUtils.addSeparator(meshMenu, "Remove:");
 			mi = new JMenuItem("Remove Selected...", IconFactory.getMenuIcon(
 				GLYPH.DELETE));
 			mi.addActionListener(e -> {
@@ -4726,7 +4891,7 @@ public class Viewer3D {
 
 		private JPopupMenu refBrainsMenu() {
 			final JPopupMenu refMenu = new JPopupMenu("Reference Brains");
-			addSeparator(refMenu, "Mouse:");
+			GuiUtils.addSeparator(refMenu, "Mouse:");
 			JMenuItem mi = new JMenuItem("Allen CCF Navigator", IconFactory
 					.getMenuIcon(GLYPH.NAVIGATE));
 			mi.addActionListener(e -> {
@@ -4761,12 +4926,12 @@ public class Viewer3D {
 			});
 			refMenu.add(mi);
 			
-			addSeparator(refMenu, "Zebrafish:");
+			GuiUtils.addSeparator(refMenu, "Zebrafish:");
 			mi = new JMenuItem("Max Planck ZBA", IconFactory.getMenuIcon(GLYPH.ARCHIVE));
 			mi.addActionListener(e -> loadRefBrainAction(true, MESH_LABEL_ZEBRAFISH));
 			refMenu.add(mi);
 
-			addSeparator(refMenu, "Drosophila:");
+			GuiUtils.addSeparator(refMenu, "Drosophila:");
 			mi = new JMenuItem("Adult Brain: FlyCircuit", IconFactory.getMenuIcon(GLYPH.ARCHIVE));
 			mi.addActionListener(e -> loadRefBrainAction(true, MESH_LABEL_FCWB));
 			refMenu.add(mi);
@@ -4824,7 +4989,7 @@ public class Viewer3D {
 					try {
 						return loadRefBrainInternal(label) != null;
 					} catch (final NullPointerException | IllegalArgumentException ex) {
-						guiUtils.error("An error occured and mesh could not be retrieved. See Console for details.");
+						guiUtils.error("An error occurred and mesh could not be retrieved. See Console for details.");
 						ex.printStackTrace();
 						return false;
 					} catch (final RuntimeException e2) {
@@ -4847,19 +5012,13 @@ public class Viewer3D {
 			worker.execute();
 		}
 
-		private void runCmd(final Class<? extends Command> cmdClass,
-			final Map<String, Object> inputs, final int cmdType)
-		{
-			runCmd(cmdClass, inputs, cmdType, true, true);
-		}
-
 		private void runImportCmd(final Class<? extends Command> cmdClass, final Map<String, Object> inputs) {
 			runCmd(cmdClass, inputs, CmdWorker.DO_NOTHING, true, false); // cmd itself sets progressbar
 		}
 
 		private void runCmd(final Class<? extends Command> cmdClass,
 			final Map<String, Object> inputs, final int cmdType,
-			final boolean setRecViewerParamater, final boolean setProgress)
+			final boolean setRecViewerParamater, final boolean indeterminateProgress)
 		{
 			if (cmdService == null) {
 				guiUtils.error(
@@ -4867,7 +5026,7 @@ public class Viewer3D {
 				return;
 			}
 			SwingUtilities.invokeLater(() -> {
-				(new CmdWorker(cmdClass, inputs, cmdType, setRecViewerParamater, setProgress))
+				(new CmdWorker(cmdClass, inputs, cmdType, setRecViewerParamater, indeterminateProgress))
 					.execute();
 			});
 		}
@@ -5200,7 +5359,7 @@ public class Viewer3D {
 									.append("<br>&nbsp;<br>").append(String.join("; ", failedCompartments))
 									.append("<br>&nbsp;<br>")
 									.append("Either such meshes are not available or file(s) could not be reached. Check Console logs for details.");
-							guiUtils.centeredMsg(sb.toString(), "Exceptions Occured");
+							guiUtils.centeredMsg(sb.toString(), "Exceptions Occurred");
 						}
 					} catch (final InterruptedException | ExecutionException e) {
 						SNTUtils.error(e.getMessage(), e);
@@ -5264,6 +5423,7 @@ public class Viewer3D {
 			GuiUtils.collapseAllTreeNodes(tree); // compute sizes based on collapsed tree
 			dialog.pack();
 			GuiUtils.expandAllTreeNodes(tree);
+			cmdFinder.attach(dialog);
 			dialog.setVisible(true);
 			return dialog;
 		}
@@ -5394,6 +5554,29 @@ public class Viewer3D {
 					}
 				}
 			});
+		}
+
+		public List<String> getCheckBoxListSelectedValues(final ListSelectionEvent e) {
+			final CheckBoxListSelectionModel listSelectionModel = getCheckBoxListSelectionModel();
+			final int iMin = e.getFirstIndex();
+			final int iMax = e.getLastIndex();
+			final List<String> result = new ArrayList<>();
+			if ((iMin < listSelectionModel.getMinSelectionIndex())
+					|| (iMax < listSelectionModel.getMaxSelectionIndex())) {
+				return result;
+			}
+			for (int i = iMin; i <= iMax; i++) {
+				if (i == listSelectionModel.getAllEntryIndex() && listSelectionModel.isAllEntryConsidered()) {
+					continue;
+				}
+				if (i > listSelectionModel.getModel().getSize() - 1) {
+					break; // somehow this happens when getAllEntryIndex() detection fails!?
+				}
+				if (listSelectionModel.isSelectedIndex(i)) {
+					result.add(getModel().getElementAt(i).toString());
+				}
+			}
+			return result;
 		}
 
 		@Override
@@ -5549,7 +5732,7 @@ public class Viewer3D {
 		static String applyTag(final String entry, final String tag) {
 			final String cleansedTag = getCleansedTag(tag);
 			if (cleansedTag.trim().isEmpty()) return entry;
-			if (entry.indexOf("}") == -1) {
+			if (!entry.contains("}")) {
 				final StringBuilder sb = new StringBuilder(entry);
 				sb.append("{").append(cleansedTag).append("}");
 				return sb.toString();
@@ -5623,7 +5806,7 @@ public class Viewer3D {
 			super.fireContentsChanged(source, index0, index1);
 			if (frame != null && frame.managerPanel != null) {
 				frame.managerPanel.searchableBar.setStatusLabelPlaceholder(String.format(
-						"%d item(s) listed", managerList.model.size() - 1));
+						"%d item(s) listed", size() - 1));
 			}
 		}
 
@@ -5670,6 +5853,21 @@ public class Viewer3D {
 		default:
 			return ShapeTree.ANY;
 		}
+	}
+
+	private void toggleControlPanel() {
+		if (Viewer3D.this.frame.manager!= null) {
+			frame.manager.setVisible(!frame.manager.isVisible());
+			if (frame.manager.isVisible()) {
+				frame.manager.toFront();
+				frame.manager.requestFocus();
+			} else {
+				frame.toFront();
+				frame.requestFocus();
+				frame.canvas.requestFocusInWindow();
+			}
+		} else
+			displayMsg("Controls are not available for this viewer");
 	}
 
 	private class ShapeTree extends Shape {
@@ -5732,11 +5930,12 @@ public class Viewer3D {
 			final List<LineStripPlus> lines = new ArrayList<>();
 			final List<SWCPoint> somaPoints = new ArrayList<>();
 			final List<java.awt.Color> somaColors = new ArrayList<>();
+			final boolean validSoma = tree.validSoma();
 
 			for (final Path p : tree.list()) {
 
 				// Stash soma coordinates
-				if (Path.SWC_SOMA == p.getSWCType()) {
+				if (validSoma && Path.SWC_SOMA == p.getSWCType()) {
 					for (int i = 0; i < p.size(); i++) {
 						final PointInImage pim = p.getNode(i);
 						final SWCPoint swcPoint = new SWCPoint(-1, Path.SWC_SOMA, pim.x, pim.y, pim.z,
@@ -5957,18 +6156,18 @@ public class Viewer3D {
 		private final Map<String, Object> inputs;
 		private final int type;
 		private final boolean setRecViewerParamater;
-		private final boolean displayProgressBar;
+		private final boolean indeterminateProgress;
 
 		public CmdWorker(final Class<? extends Command> cmd,
 			final Map<String, Object> inputs, final int type,
-			final boolean setRecViewerParamater, final boolean setPrgress)
+			final boolean setRecViewerParamater, final boolean indeterminateProgress)
 		{
 			this.cmd = cmd;
 			this.inputs = inputs;
 			this.type = type;
 			this.setRecViewerParamater = setRecViewerParamater;
-			displayProgressBar = setPrgress && getManagerPanel() != null;
-			if (displayProgressBar) addProgressLoad(-1);
+			this.indeterminateProgress = indeterminateProgress && getManagerPanel() != null;
+			if (this.indeterminateProgress) getManagerPanel().showProgress(-1, -1);
 		}
 
 		@Override
@@ -5980,9 +6179,11 @@ public class Viewer3D {
 				cmdService.run(cmd, true, input).get(); //FIXME: This returns null all the time with DynamicCommands and does not wait for get()
 				return true;
 			}
-			catch (InterruptedException | ExecutionException e2) {
-				if (gUtils != null)
+			catch (final InterruptedException | ExecutionException e2) {
+				if (gUtils != null) {
 					gUtils.error("Unfortunately an exception occured. See console for details.");
+					if (indeterminateProgress) getManagerPanel().showProgress(0, 0);
+				}
 				e2.printStackTrace();
 				return false;
 			}
@@ -6010,7 +6211,7 @@ public class Viewer3D {
 			catch (final Exception ignored) {
 				// do nothing
 			} finally {
-				if (displayProgressBar) removeProgressLoad(-1);
+				if (indeterminateProgress) getManagerPanel().showProgress(0, 0);
 			}
 		}
 	}
@@ -6066,7 +6267,7 @@ public class Viewer3D {
 
 		@Override
 		public boolean handleSlaveThread(final MouseEvent e) {
-			if (!e.isConsumed() && SwingUtilities.isLeftMouseButton(e)) {
+			if (!e.isConsumed() && SwingUtilities.isLeftMouseButton(e) && e.getClickCount() > 1) {
 				if (!chart.isRotationEnabled()) {
 					displayMsg("Rotations disabled in current view");
 					return false;
@@ -6210,11 +6411,22 @@ public class Viewer3D {
 
 		private float zoomStep;
 		private double rotationStep;
+		private static final int DOUBLE_PRESS_INTERVAL = 300; // ms
+		private long timeKeyDown = 0; // last time key was pressed
+		private int lastKeyPressedCode;
 
 		public KeyController(final Chart chart) {
 			register(chart);
 		}
 
+		private boolean isDoublePress(final KeyEvent ke) {
+			if (lastKeyPressedCode == ke.getKeyCode() && ((ke.getWhen() -
+				timeKeyDown) < DOUBLE_PRESS_INTERVAL)) return true;
+			timeKeyDown = ke.getWhen();
+			lastKeyPressedCode = ke.getKeyCode();
+			return false;
+		}
+	
 		/*
 		 * (non-Javadoc)
 		 *
@@ -6222,6 +6434,7 @@ public class Viewer3D {
 		 */
 		@Override
 		public void keyPressed(final KeyEvent e) {
+			final boolean doublePress = isDoublePress(e);
 			switch (e.getKeyChar()) {
 				case 'a':
 				case 'A':
@@ -6230,13 +6443,7 @@ public class Viewer3D {
 				case 'c':
 				case 'C':
 					if (e.isShiftDown()) {
-						if (Viewer3D.this.frame.manager!= null) {
-							frame.manager.setVisible(!frame.manager.isVisible());
-							frame.toFront();
-							frame.requestFocus();
-							frame.canvas.requestFocusInWindow();
-						} else
-							displayMsg("Controls are not available for this viewer");
+						toggleControlPanel();
 					} else if (!emptySceneMsg())
 						changeCameraMode();
 					break;
@@ -6254,7 +6461,7 @@ public class Viewer3D {
 					break;
 				case 'r':
 				case 'R':
-					if (e.isShiftDown()) {
+					if (doublePress || e.isShiftDown()) {
 						validate();
 						displayMsg("Scene reloaded");
 					} else {
@@ -6263,12 +6470,19 @@ public class Viewer3D {
 					break;
 				case 's':
 				case 'S':
-					saveScreenshot();
+					if (e.isShiftDown() && frame != null) {
+						frame.status.setVisible(!frame.status.isVisible());
+					} else {
+						saveScreenshot();
+					}
 					break;
 				case 'f':
 				case 'F':
 					if (e.isShiftDown()) {
-						frame.enterFullScreen();
+						if (frame.isFullScreen)
+							frame.exitFullScreen();
+						else
+							frame.enterFullScreen();
 					} else {
 						if (!emptySceneMsg()) fitToVisibleObjects(true, true);
 					}
@@ -6320,6 +6534,7 @@ public class Viewer3D {
 							break;
 					}
 			}
+
 		}
 
 		private void pan(final Coord2d direction) {
@@ -6420,10 +6635,14 @@ public class Viewer3D {
 				newForeground = Color.WHITE;
 				newBackground = Color.BLACK;
 			}
+			if (frame != null) {
+				frame.status.getParent().setBackground(toAWTColor(newBackground));
+				frame.status.setBackground(toAWTColor(newBackground));
+				frame.status.setForeground(toAWTColor(newForeground));
+			}
 			view.setBackgroundColor(newBackground);
 			view.getAxis().getLayout().setGridColor(newForeground);
 			view.getAxis().getLayout().setMainColor(newForeground);
-			((AChart)chart).overlayAnnotation.setForegroundColor(newForeground);
 			if (cBar != null) cBar.updateColors();
 
 			// Apply foreground color to trees with background color
@@ -6438,7 +6657,7 @@ public class Viewer3D {
 				if (shape == null) return;
 				for (int i = 0; i < shape.size(); i++) {
 					final List<Point> points = ((LineStripPlus) shape.get(i)).getPoints();
-					points.stream().forEach(p -> {
+					points.forEach(p -> {
 						final Color pColor = p.getColor();
 						if (isSameRGB(pColor, newBackground)) {
 							changeRGB(pColor, newForeground);
@@ -6515,8 +6734,8 @@ public class Viewer3D {
 			sb.append("    <td>Press 'R'</td>");
 			sb.append("  </tr>");
 			sb.append("  </tr>");
-			sb.append("    <td><u>R</u>eload View</td>");
-			sb.append("    <td>Press Shift+'R'</td>");
+			sb.append("    <td><u>R</u>eload Scene</td>");
+			sb.append("    <td>Press 'R' twice</td>");
 			sb.append("  </tr>");
 			sb.append("  <tr>");
 			sb.append("    <td><u>S</u>napshot</td>");
@@ -6524,12 +6743,16 @@ public class Viewer3D {
 			sb.append("  </tr>");
 			if (showInDialog) sb.append("  <tr>");
 			sb.append("  <tr>");
-			sb.append("    <td>Full Screen</td>");
-			sb.append("    <td>Shift+F (Esc to exit)</td>");
+			sb.append("    <td>Toggle RV <u>C</u>ontrols</td>");
+			sb.append("    <td>Shift+C</td>");
 			sb.append("  </tr>");
 			sb.append("  <tr>");
-			sb.append("    <td>Toggle Control Panel</td>");
-			sb.append("    <td>Shift+C</td>");
+			sb.append("    <td>Toggle <u>F</u>ull Screen</td>");
+			sb.append("    <td>Shift+F</td>");
+			sb.append("  </tr>");
+			sb.append("  <tr>");
+			sb.append("    <td>Toggle <u>S</u>tatus Bar</td>");
+			sb.append("    <td>Shift+S</td>");
 			sb.append("  </tr>");
 			if (showInDialog) {
 				sb.append("  <tr>");
@@ -6546,7 +6769,7 @@ public class Viewer3D {
 					gUtils.showHTMLDialog(sb.toString(), "Viewer Shortcuts", false);
 			}
 			else {
-				displayMsg(sb.toString(), 10000);
+				displayBanner(sb.toString());
 			}
 
 		}
@@ -6555,12 +6778,12 @@ public class Viewer3D {
 	private class OverlayAnnotation extends CameraEyeOverlayAnnotation {
 
 		private FPSAnimator joglAnimator;
-		private java.awt.Color color;
 		private String label;
 		private Font labelFont;
 		private java.awt.Color labelColor;
 		private float labelX = 2;
 		private float labelY = 0;
+//		private CubeComposite axisBox;
 
 		private OverlayAnnotation(final View view) {
 			super(view);
@@ -6572,10 +6795,8 @@ public class Viewer3D {
 					// do nothing
 				}
 			}
-		}
-
-		private void setForegroundColor(final Color c) {
-			color = new java.awt.Color(c.r, c.g, c.b);
+//			axisBox = new CubeComposite(view.getSpaceTransformer().compute(view.getBounds()),
+//					view.getAxis().getLayout().getGridColor(), view.getAxis().getLayout().getMainColor());
 		}
 
 		private void setFont(final Font font, final float angle) {
@@ -6601,15 +6822,22 @@ public class Viewer3D {
 				RenderingHints.VALUE_ANTIALIAS_ON);
 			g2d.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING,
 				RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
-			g2d.setColor(color);
 			if (SNTUtils.isDebugMode()) {
+				g2d.setColor(toAWTColor(view.getAxisLayout().getMainColor()));
+				g2d.setFont(g2d.getFont().deriveFont((float)view.getAxisLayout().getFont().getHeight()));
 				int lineHeight = g.getFontMetrics().getHeight();
-				g2d.drawString("Camera: " + view.getCamera().getEye(), 20, lineHeight);
-				g2d.drawString("FOV: " + view.getCamera().getRenderingSphereRadius(),
-					20, lineHeight += lineHeight);
+				int lineNo = 1;
+				g2d.drawString("Camera: " + view.getCamera().getEye(), 20, lineHeight * lineNo++);
+				g2d.drawString("FOV: " + view.getCamera().getRenderingSphereRadius(), 20, lineHeight * lineNo++);
+				g2d.drawString("Near: " + view.getCamera().getNear(), 20, lineHeight * lineNo++);
+				g2d.drawString("Far: " + view.getCamera().getFar(), 20, lineHeight * lineNo++);
+//				g2d.drawString("Up Z: " + view.getCamera().getUp().z, 20, lineHeight * lineNo++);
+//				g2d.drawString("Axe:" + view.getAxis().getBounds().toString(), 20, lineHeight * lineNo++);
+//				g2d.drawString("Transformed axe: " + axisBox.getBounds().toString(), 20, lineHeight * lineNo++);
 				if (joglAnimator != null) {
-					g2d.drawString(joglAnimator.getLastFPS() + " FPS", 20, lineHeight += lineHeight);
+					g2d.drawString(joglAnimator.getLastFPS() + " FPS", 20, lineHeight * lineNo);
 				}
+
 			}
 			if (label == null || label.isEmpty()) return;
 			if (labelColor != null) g2d.setColor(labelColor);
@@ -6678,7 +6906,7 @@ public class Viewer3D {
 			pack();
 			setVisible(true);
 			if (viewerFrame.manager != null) {
-				viewerFrame.manager .toBack(); // byPasses MacOS bug?
+				viewerFrame.manager .toBack(); // byPasses macOS bug?
 				toFront();
 			}
 		}
@@ -7113,10 +7341,7 @@ public class Viewer3D {
 			return false;
 		if (getClass() != obj.getClass())
 			return false;
-		Viewer3D other = (Viewer3D) obj;
-		if (id != other.id)
-			return false;
-		return true;
+		return id ==  ((Viewer3D) obj).id;
 	}
 
 	private void incrementProgress() {
@@ -7135,15 +7360,10 @@ public class Viewer3D {
 		}
 	}
 
-	/** will show a undetermined bar if progress max is negative */
+	/** will show an undetermined bar if progress max is negative */
 	private void addProgressLoad(final int loadSize) {
 		if (getManagerPanel()!= null) {
-			if (loadSize == -1) {
-				frame.managerPanel.progressBar.reset(true);
-				frame.managerPanel.progressBar.setLoadPending(true);
-			} else {
-				frame.managerPanel.progressBar.addToGlobalMax(loadSize);
-			}
+			frame.managerPanel.progressBar.addToGlobalMax(loadSize);
 		}
 	}
 
@@ -7186,7 +7406,7 @@ public class Viewer3D {
 			}
 		}
 
-		private class JOGLFactory extends SwingChartFactory {
+		private class JOGLFactory extends AWTChartFactory {
 
 			@Override
 			public View newView(final Scene scene, final ICanvas canvas, final Quality quality) {
@@ -7199,17 +7419,20 @@ public class Viewer3D {
 
 			public AView(final IChartFactory factory, final Scene scene, final ICanvas canvas, final Quality quality) {
 				super(factory, scene, canvas, quality);
-				// super.DISPLAY_AXE_WHOLE_BOUNDS = true;
-				// super.MAINTAIN_ALL_OBJECTS_IN_VIEW = true;
-				// setBoundMode(ViewBoundMode.AUTO_FIT);
+				//super.displayAxisWholeBounds = true;
+				setCameraRenderingSphereRadiusFactor(.85f);
 				setHiDPIenabled(Prefs.SCALE_FACTOR > 1);
+				setMaximized(false);
+				super.get2DLayout().setVerticalAxisFlip(true); // for backwards compatibility
 			}
 
 			void setHiDPIenabled(boolean enabled) {
 				super.hidpi = (enabled) ? HiDPI.ON : HiDPI.OFF;
+				if (enabled)
+					axis.getLayout().setFontSizePolicy(new HiDPITwoFontSizesPolicy(this));
 				axis.getLayout().applyFontSizePolicy();
 			}
-
+			
 			@Override
 			public void setViewPoint(Coord3d polar, boolean updateView) {
 				// see https://github.com/jzy3d/jzy3d-api/issues/214#issuecomment-975717207
@@ -7218,34 +7441,16 @@ public class Viewer3D {
 					shoot();
 				fireViewPointChangedEvent(new ViewPointChangedEvent(this, polar));
 			}
-
-			@Override
-			protected Coord3d computeCameraEyeTop(final Coord3d viewpoint, final Coord3d target) {
-				Coord3d eye = viewpoint;
-				eye.x = -(float) Math.PI / 2; // on x
-				eye.y = -(float) Math.PI / 2; // on bottom: inverted from super.computeCameraEyeTop();
-				eye = eye.cartesian().add(target);
-				return eye;
-			}
-
-			@Override
-			protected Coord3d computeCameraUp(Coord3d viewpoint) {
-				if (getViewMode() == ViewPositionMode.FREE) {
-					return viewpoint; // Attempt to bypass axis flip: see https://github.com/jzy3d/jzy3d-api/issues/214
-				}
-				return super.computeCameraUp(viewpoint);
-			}
 		}
 	}
 
 	/* IDE debug method */
 	public static void main(final String[] args) throws InterruptedException {
-		GuiUtils.setLookAndFeel();
 		final ImageJ ij = new ImageJ();
-	final Tree tree = new SNTService().demoTrees().get(0);
-	final TreeColorMapper colorizer = new TreeColorMapper(ij.getContext());
-	colorizer.map(tree, TreeColorMapper.PATH_ORDER, ColorTables.ICE);
-	final double[] bounds = colorizer.getMinMax();
+		final Tree tree = new SNTService().demoTrees().get(0);
+		final TreeColorMapper colorizer = new TreeColorMapper(ij.getContext());
+		colorizer.map(tree, TreeColorMapper.PATH_ORDER, ColorTables.ICE);
+		final double[] bounds = colorizer.getMinMax();
 		SNTUtils.setDebugMode(true);
 		final Viewer3D jzy3D = new Viewer3D(ij.context());
 		jzy3D.addColorBarLegend(ColorTables.ICE, (float) bounds[0],
@@ -7279,7 +7484,7 @@ public class Viewer3D {
 		Annotation3D annotation2 = jzy3D.annotatePoints(analyzer.getTips(), "tips");
 		annotation2.setColor("green");
 		annotation2.setSize(20);
-		ArrayList<Annotation3D> list = new ArrayList<Annotation3D>();
+		ArrayList<Annotation3D> list = new ArrayList<>();
 		list.add(annotation1);
 		list.add(annotation2);
 		Annotation3D a = jzy3D.mergeAnnotations(list, "");

@@ -2,7 +2,7 @@
  * #%L
  * Fiji distribution of ImageJ for the life sciences.
  * %%
- * Copyright (C) 2010 - 2021 Fiji developers.
+ * Copyright (C) 2010 - 2022 Fiji developers.
  * %%
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as
@@ -26,8 +26,11 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 
+import org.apache.commons.math3.stat.descriptive.SummaryStatistics;
+
 import sc.fiji.snt.Path;
 import sc.fiji.snt.Tree;
+import sc.fiji.snt.TreeProperties;
 
 /*
  * A flavor of TreeStatistics that does not do graph conversions, ensuring paths
@@ -38,10 +41,13 @@ public class PathAnalyzer extends TreeStatistics {
 	public PathAnalyzer(Collection<Path> paths, String label) {
 		super(new Tree(paths));
 		tree.setLabel(label);
+		final String unit = paths.iterator().next().getCalibration().getUnit();
+		if (paths.stream().allMatch(p -> p.getCalibration().getUnit().equals(unit)))
+			tree.getProperties().setProperty(TreeProperties.KEY_SPATIAL_UNIT, unit);;
 	}
 
 	private PathAnalyzer(final Path path) {
-		super(new Tree(Collections.singleton(path)));
+		this(Collections.singleton(path), path.getName());
 	}
 
 	@Override
@@ -78,16 +84,40 @@ public class PathAnalyzer extends TreeStatistics {
 		return getPrimaryLength();
 	}
 
-	public void measureIndividualPaths(final Collection<String> metrics) {
+	@Override
+	protected int getCol(final String header) {
+		// This flavor of TreeStatistics handles only Paths,
+		// so we'll avoid logging any references to branch
+		return super.getCol(header.replace("Branch", "Path"));
+	}
+
+	public void measureIndividualPaths(final Collection<String> metrics, final boolean summarize) {
 		if (table == null) table = new SNTTable();
-		final Collection<String> measuringMetrics = (metrics == null || metrics.isEmpty()) ? getMetrics() : metrics;
-		tree.list().forEach( path -> {
+		final Collection<String> measuringMetrics = (metrics == null || metrics.isEmpty()) ? getMetrics("safe") : metrics;
+		tree.list().forEach(path -> {
 			final int row = getNextRow(path.getName());
-			table.set(getCol("SWC Type"), row, Path.getSWCtypeName(path.getSWCType(), true));
+			table.set(getCol("SWC Type(s)"), row, Path.getSWCtypeName(path.getSWCType(), true)); // plural heading for consistency with other commands
 			measuringMetrics.forEach(metric -> {
-				table.set(getCol(metric), row,  new PathAnalyzer(path).getMetricInternal(metric));
+				// The easiest here is to initialize an instance aware only of this single
+				// path. Then, we can recycle the logic behind #assembleStats(). Since, all
+				// getBranches() related code has been (hopefully) overridden, this will
+				// effectively retrieve the single-value metric for this path.
+				final PathAnalyzer analyzer = new PathAnalyzer(path);
+				final SummaryStatistics dummy = new SummaryStatistics();
+				analyzer.assembleStats(new StatisticsInstance(dummy), metric);
+				Number value;
+				try {
+					value = dummy.getMax(); // since N=1, same as the value itself
+				} catch (final IllegalArgumentException ignored) {
+					// maybe we are handling some legacy metric description!?
+					value = analyzer.getMetricInternal(metric);
+				}
+				table.set(getCol(metric), row, value);
 			});
 		});
-		if (getContext() != null) updateAndDisplayTable();
+		if (summarize && table instanceof SNTTable) {
+			((SNTTable) table).summarize();
+		}
+		updateAndDisplayTable();
 	}
 }

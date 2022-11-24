@@ -2,7 +2,7 @@
  * #%L
  * Fiji distribution of ImageJ for the life sciences.
  * %%
- * Copyright (C) 2010 - 2021 Fiji developers.
+ * Copyright (C) 2010 - 2022 Fiji developers.
  * %%
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as
@@ -135,9 +135,9 @@ public class SNTSearchableBar extends SearchableBar {
 	private void updatPlaceholderText() {
 		final TextFieldWithPlaceholder editorField = ((GuiUtils.TextFieldWithPlaceholder)_comboBox.getEditor().getEditorComponent());
 		if (getSearchable().isWildcardEnabled() && getSearchable().isCaseSensitive())
-			editorField.changePlaceholder("Active filters: [Aa]  [.?*]", false);
+			editorField.changePlaceholder("Active filters: [Aa]  [?*]", false);
 		else if (getSearchable().isWildcardEnabled())
-			editorField.changePlaceholder("Active filter: [.?*]", false);
+			editorField.changePlaceholder("Active filter: [?*]", false);
 		else if (getSearchable().isCaseSensitive())
 			editorField.changePlaceholder("Active filter: [Aa]", false);
 		else
@@ -238,7 +238,7 @@ public class SNTSearchableBar extends SearchableBar {
 	private JButton createSearchOptionsButton() {
 		final JPopupMenu popup = new JPopupMenu();
 		final JButton button = new JButton();
-		button.setToolTipText("Text-based filtering options");
+		button.setToolTipText("Options for text-based filtering");
 		button.addActionListener( e -> {
 			popup.show(button, button.getWidth() / 2, button.getHeight() / 2);
 		});
@@ -246,23 +246,29 @@ public class SNTSearchableBar extends SearchableBar {
 
 		final JMenuItem jcbmi1 = new JCheckBoxMenuItem("Case Sensitive Matching", getSearchable().isCaseSensitive());
 		jcbmi1.addItemListener(e -> {
+			_comboBox.getEditor().getEditorComponent().requestFocus();
 			getSearchable().setCaseSensitive(jcbmi1.isSelected());
 			updatPlaceholderText();
+			_comboBox.getEditor().getEditorComponent().transferFocusBackward();
 			updateSearch();
 		});
 		popup.add(jcbmi1);
-		final JMenuItem jcbmi4 = new JCheckBoxMenuItem("Display No. of Matches", getSearchable().isCountMatch());
-		jcbmi4.setToolTipText("May adversely affect performance if selected");
-		jcbmi4.addItemListener(e -> {
-			setShowMatchCount(jcbmi4.isSelected());
-			updateSearch();
-		});
-		popup.add(jcbmi4);
+		if ((getVisibleButtons() & SHOW_STATUS) != 0) {
+			final JMenuItem jcbmi4 = new JCheckBoxMenuItem("Display No. of Matches", getSearchable().isCountMatch());
+			jcbmi4.setToolTipText("May adversely affect performance if selected");
+			jcbmi4.addItemListener(e -> {
+				setShowMatchCount(jcbmi4.isSelected());
+				updateSearch();
+			});
+			popup.add(jcbmi4);
+		}
 		final JMenuItem jcbmi2 = new JCheckBoxMenuItem("Enable Wildcards (?*)", getSearchable().isWildcardEnabled());
 		jcbmi2.setToolTipText("<HTML><b>?</b> (any character) and <b>*</b> (any string) supported");
 		jcbmi2.addItemListener(e -> {
+			_comboBox.getEditor().getEditorComponent().requestFocus();
 			getSearchable().setWildcardEnabled(jcbmi2.isSelected());
 			updatPlaceholderText();
+			_comboBox.getEditor().getEditorComponent().transferFocusBackward();
 			updateSearch();
 		});
 		popup.add(jcbmi2);
@@ -280,15 +286,18 @@ public class SNTSearchableBar extends SearchableBar {
 		mi2.addActionListener(e -> {
 			if (objectDescription == null) objectDescription = "items";
 			final String key = GuiUtils.ctrlKey();
-			final String msg = "<HTML><body><div style='width:500;'><ol>"
+			String msg = "<HTML><body><div style='width:500;'><ol>"
 					+ "<li>Press the up/down keys to find the next/previous occurrence of the filtering string</li>"
 					+ "<li>Hold " + key + " while pressing the up/down keys to select multiple filtered "
-					+ objectDescription + "</li>" + "<li>Press the <i>Highlight All</i> button to select all the "
-					+ objectDescription + " filtered by the search string</li>"
-					//+ "<li>Search is case-insensitive by default. Wildcards "
-					//+ "<b>?</b> (any character), and <b>*</b> (any string) can also be used</li>"
-					+ "<li>Uncheck <i>Display No. of Matches</i> to improve search performance</li>"
-					+ "</ol></div></html>";
+					+ objectDescription + "</li>";
+			if ((getVisibleButtons() & SHOW_HIGHLIGHTS) != 0) {
+					msg += "<li>Press the <i>Highlight All</i> button to select all the "
+					+ objectDescription + " filtered by the search string</li>";
+			}
+			if (isShowMatchCount()) {
+					msg += "<li>Uncheck <i>Display No. of Matches</i> to improve search performance</li>";
+			}
+					msg += "</ol></div></html>";
 			getGuiUtils().centeredMsg(msg, "Text-based Filtering");
 		});
 		popup.add(mi2);
@@ -353,7 +362,12 @@ public class SNTSearchableBar extends SearchableBar {
 
 	@Override
 	protected AbstractButton createCloseButton(final AbstractAction closeAction) {
-		final AbstractButton button = super.createCloseButton(closeAction);
+	    final AbstractButton button = new JButton();
+	    button.addActionListener(closeAction);
+	    //button.setBorder(BorderFactory.createEmptyBorder());
+	    //button.setOpaque(false);
+	    button.setRequestFocusEnabled(false);
+	    button.setFocusable(false);
 		formatButton(button, IconFactory.GLYPH.TIMES);
 		return button;
 	}

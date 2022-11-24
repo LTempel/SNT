@@ -2,7 +2,7 @@
  * #%L
  * Fiji distribution of ImageJ for the life sciences.
  * %%
- * Copyright (C) 2010 - 2021 Fiji developers.
+ * Copyright (C) 2010 - 2022 Fiji developers.
  * %%
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as
@@ -75,6 +75,7 @@ public class RoiConverter extends TreeAnalyzer {
 		super(tree);
 		imp = null;
 		hyperstack = false;
+		twoD = !tree.is3D();
 	}
 
 	/**
@@ -313,7 +314,10 @@ public class RoiConverter extends TreeAnalyzer {
 			// polyline.fitSplineForStraightening();
 			polyline.setStrokeColor(color);
 			polyline.setStrokeWidth(strokeWidth);
-			polyline.setName(String.format("%s-%s-%04d", basename, sPlane, roi_id));
+			if (twoD)
+				polyline.setName(String.format("%s-%04d", basename, roi_id));
+			else
+				polyline.setName(String.format("%s-%s-%04d", basename, sPlane, roi_id));
 			setPosition(polyline, impPosition);
 			return polyline;
 		}

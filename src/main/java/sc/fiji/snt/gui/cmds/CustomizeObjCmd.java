@@ -2,7 +2,7 @@
  * #%L
  * Fiji distribution of ImageJ for the life sciences.
  * %%
- * Copyright (C) 2010 - 2021 Fiji developers.
+ * Copyright (C) 2010 - 2022 Fiji developers.
  * %%
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as
@@ -52,7 +52,7 @@ public class CustomizeObjCmd extends ContextCommand {
 	@Parameter(label = "Transparency (%)", min = "0.5", max = "100", style = NumberWidget.SCROLL_BAR_STYLE)
 	private double mTransparency;
 
-	@Parameter(label = "Skip mesh customization")
+	@Parameter(label = "Skip mesh customization", description="If checked, only bounding-box settings are applied")
 	private boolean skipM;
 
 	@Parameter(label = "<HTML>&nbsp;", required = false, persist = false, visibility = ItemVisibility.MESSAGE)

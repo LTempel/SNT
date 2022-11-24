@@ -2,7 +2,7 @@
  * #%L
  * Fiji distribution of ImageJ for the life sciences.
  * %%
- * Copyright (C) 2010 - 2021 Fiji developers.
+ * Copyright (C) 2010 - 2022 Fiji developers.
  * %%
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as
@@ -55,6 +55,8 @@ public class PointInImage implements SNTPoint {
 
 	private char lr = BrainAnnotation.ANY_HEMISPHERE;
 
+
+	public PointInImage() {}
 
 	public PointInImage(final double x, final double y, final double z) {
 		this.x = x;

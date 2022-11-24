@@ -2,7 +2,7 @@
  * #%L
  * Fiji distribution of ImageJ for the life sciences.
  * %%
- * Copyright (C) 2010 - 2021 Fiji developers.
+ * Copyright (C) 2010 - 2022 Fiji developers.
  * %%
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as
@@ -29,15 +29,16 @@ import java.util.stream.IntStream;
 
 import net.imagej.Dataset;
 import net.imagej.ImageJ;
-import net.imagej.plot.LineStyle;
-import net.imagej.plot.MarkerStyle;
-import net.imagej.plot.PlotService;
-import net.imagej.plot.XYPlot;
-import net.imagej.plot.XYSeries;
+import org.scijava.plot.LineStyle;
+import org.scijava.plot.MarkerStyle;
+import org.scijava.plot.PlotService;
+import org.scijava.plot.XYPlot;
+import org.scijava.plot.XYSeries;
 
 import net.imglib2.RandomAccessibleInterval;
 import net.imglib2.type.numeric.RealType;
 
+import org.apache.commons.math3.stat.descriptive.SummaryStatistics;
 import org.scijava.ItemVisibility;
 import org.scijava.command.Command;
 import org.scijava.command.CommandService;
@@ -49,6 +50,7 @@ import org.scijava.util.Colors;
 
 import ij.ImagePlus;
 import ij.gui.Plot;
+import ij.plugin.filter.MaximumFinder;
 import sc.fiji.snt.Path;
 import sc.fiji.snt.SNTService;
 import sc.fiji.snt.SNTUtils;
@@ -470,6 +472,40 @@ public class PathProfiler extends CommonDynamicCmd {
 	}
 
 	/**
+	 * Finds the maxima in the profile of the specified path.
+	 * <p>
+	 * A maxima (peak) will only be considered if protruding more than the profile's
+	 * standard deviation from the ridge to a higher maximum
+	 * </p>
+	 * 
+	 * @param channel the channel
+	 * @return the indices of the maxima
+	 */
+	public int[] findMaxima(final Path path, final int channel) {
+		final double[] profile = getValues(path, channel).get(PathProfiler.Y_VALUES).stream().mapToDouble(d -> d).toArray();
+		final SummaryStatistics stats = new SummaryStatistics();
+		Arrays.stream(profile).forEach(v -> stats.addValue(v));
+		return MaximumFinder.findMaxima(profile, stats.getStandardDeviation(), false);
+	}
+
+	/**
+	 * Finds the minima in the profile of the specified path.
+	 * <p>
+	 * A maxima (peak) will only be considered if protruding less than the profile's
+	 * standard deviation from the ridge to a lower minimum
+	 * </p>
+	 * 
+	 * @param channel the channel
+	 * @return the indices of the minima
+	 */
+	public int[] findMinima(final Path path, final int channel) {
+		final double[] profile = getValues(path, channel).get(PathProfiler.Y_VALUES).stream().mapToDouble(d -> d).toArray();
+		final SummaryStatistics stats = new SummaryStatistics();
+		Arrays.stream(profile).forEach(v -> stats.addValue(v));
+		return MaximumFinder.findMinima(profile, stats.getStandardDeviation(), false);
+	}
+
+	/**
 	 * Sets whether the profile abscissae should be reported in real-word units
 	 * (the default) or node indices (zero-based). Must be called before calling
 	 * {@link #getValues(Path)}, {@link #getPlot()} or {@link #getXYPlot()}.
@@ -533,7 +569,7 @@ public class PathProfiler extends CommonDynamicCmd {
 		final XYSeries series = plot.addXYSeries();
 		final Map<String, List<Double>> values = getValues(p);
 		series.setLabel(p.getName());
-		series.setStyle(plot.newSeriesStyle(color, LineStyle.SOLID,
+		series.setStyle(plotService.newSeriesStyle(color, LineStyle.SOLID,
 			MarkerStyle.CIRCLE));
 		series.setValues(values.get(X_VALUES), values.get(Y_VALUES));
 		series.setLegendVisible(setLegend);

@@ -2,7 +2,7 @@
  * #%L
  * Fiji distribution of ImageJ for the life sciences.
  * %%
- * Copyright (C) 2010 - 2021 Fiji developers.
+ * Copyright (C) 2010 - 2022 Fiji developers.
  * %%
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as
@@ -25,8 +25,12 @@ package sc.fiji.snt.viewer;
 import java.awt.Color;
 import java.text.DecimalFormat;
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.ListIterator;
+import java.util.Map;
 
 import net.imglib2.RealLocalizable;
 import net.imglib2.roi.geom.real.Polygon2D;
@@ -41,15 +45,15 @@ import org.scijava.Context;
 import org.scijava.plugin.Parameter;
 import org.scijava.ui.UIService;
 import org.scijava.util.ColorRGB;
+import org.scijava.util.Colors;
 
 import net.imagej.ImageJ;
-import net.imagej.plot.LineStyle;
-import net.imagej.plot.MarkerStyle;
-import net.imagej.plot.PlotService;
-import net.imagej.plot.XYPlot;
-import net.imagej.plot.XYSeries;
-import net.imagej.plot.defaultplot.DefaultPlotService;
-import net.imagej.ui.swing.viewer.plot.jfreechart.XYPlotConverter;
+import org.scijava.plot.LineStyle;
+import org.scijava.plot.MarkerStyle;
+import org.scijava.plot.PlotService;
+import org.scijava.plot.XYPlot;
+import org.scijava.plot.XYSeries;
+import org.scijava.plot.defaultplot.DefaultPlotService;
 import net.imglib2.display.ColorTable;
 import sc.fiji.snt.Path;
 import sc.fiji.snt.SNTService;
@@ -58,7 +62,9 @@ import sc.fiji.snt.Tree;
 import sc.fiji.snt.analysis.ColorMapper;
 import sc.fiji.snt.analysis.SNTChart;
 import sc.fiji.snt.analysis.TreeColorMapper;
+import org.scijava.ui.swing.viewer.plot.jfreechart.XYPlotConverter;
 import sc.fiji.snt.util.PointInImage;
+import sc.fiji.snt.util.SNTColor;
 import sc.fiji.snt.util.SNTPoint;
 
 /**
@@ -77,8 +83,8 @@ public class Viewer2D extends TreeColorMapper {
 
 	protected XYPlot plot;
 	private String title;
-	private JFreeChart chart;
-	private ColorRGB defaultColor = new ColorRGB("black");
+	private SNTChart chart;
+	private ColorRGB defaultColor = Colors.BLACK;
 	private boolean visibleAxes;
 	private boolean visibleGridLines;
 	private boolean visibleOutline;
@@ -102,10 +108,30 @@ public class Viewer2D extends TreeColorMapper {
 	 *          required by the viewer.
 	 */
 	public Viewer2D(final Context context) {
+		this(context, null);
+	}
+
+	/**
+	 * Instantiates an empty 2D viewer.
+	 *
+	 * @param context  the SciJava application context providing the services
+	 *                 required by the viewer.
+	 * @param template a viewer instance from which properties (axes visibility,
+	 *                 title, etc.) will be applied
+	 */
+	public Viewer2D(final Context context, final Viewer2D template) {
 		super(context);
-		setAxesVisible(true);
-		setGridlinesVisible(true);
-		setOutlineVisible(true);
+		if (template == null) {
+			setAxesVisible(true);
+			setGridlinesVisible(true);
+			setOutlineVisible(true);
+		} else {
+			setAxesVisible(template.getAxesVisible());
+			setGridlinesVisible(template.getGridlinesVisible());
+			setOutlineVisible(template.getOutlineVisible());
+			setTitle(template.getTitle());
+			setDefaultColor(template.defaultColor);
+		}
 	}
 
 	private void addPaths(final ArrayList<Path> paths) {
@@ -136,7 +162,7 @@ public class Viewer2D extends TreeColorMapper {
 		series.setValues(xc, yc);
 		series.setLegendVisible(false);
 		final ColorRGB color = defaultColor;
-		series.setStyle(plot.newSeriesStyle(color, LineStyle.SOLID, MarkerStyle.NONE));
+		series.setStyle(plotService.newSeriesStyle(color, LineStyle.SOLID, MarkerStyle.NONE));
 	}
 
 	private void plotPaths() {
@@ -145,11 +171,8 @@ public class Viewer2D extends TreeColorMapper {
 		}
 		initPlot();
 		for (final Path p : paths) {
-			if (p.hasNodeColors()) {
-				plotColoredNodePaths(p);
-				continue;
-			}
 			final XYSeries series = plot.addXYSeries();
+			series.setLegendVisible(false);
 			series.setLabel(p.getName());
 			final List<Double> xc = new ArrayList<>();
 			final List<Double> yc = new ArrayList<>();
@@ -163,45 +186,52 @@ public class Viewer2D extends TreeColorMapper {
 				yc.add(pim.y);
 			}
 			series.setValues(xc, yc);
-			series.setLegendVisible(false);
 			final ColorRGB color = (p.getColor() == null) ? defaultColor
 				: new ColorRGB(p.getColor().getRed(), p.getColor().getGreen(), p
 					.getColor().getBlue());
-			series.setStyle(plot.newSeriesStyle(color, LineStyle.SOLID,
+			series.setStyle(plotService.newSeriesStyle(color, LineStyle.SOLID,
 				MarkerStyle.NONE));
 		}
+		plotColoredNodePathsFast(); // will do nothing if no color nodes exist
 	}
 
-	private void plotColoredNodePaths(final Path p) {
-		if (p.getStartJoinsPoint() != null) {
-			final XYSeries series = plot.addXYSeries();
-			final List<Double> xc = new ArrayList<>();
-			final List<Double> yc = new ArrayList<>();
-			xc.add(p.getStartJoinsPoint().x);
-			yc.add(p.getStartJoinsPoint().y);
-			series.setValues(xc, yc);
-			series.setLegendVisible(false);
-			final Color c = p.getNodeColor(0);
-			final ColorRGB cc = (c == null) ? defaultColor : new ColorRGB(c.getRed(),
-					c.getGreen(), c.getBlue());
-			series.setStyle(plot.newSeriesStyle(cc, LineStyle.NONE,
-					MarkerStyle.FILLEDCIRCLE));
+	private Map<Color, List<PointInImage>> getNodesColorMapFast() {
+		final Map<Color, List<PointInImage>> map = new HashMap<>();
+		for (final Path p : paths) {
+			if (!p.hasNodeColors()) continue;
+			final Color[] pathColors = p.getNodeColors();
+			for (int node = 0; node < pathColors.length; node++) {
+				if (pathColors[node] == null)
+					continue;
+				final PointInImage pim = p.getNode(node);
+				if (map.get(pathColors[node]) == null) {
+					final List<PointInImage> pims = new ArrayList<>();
+					pims.add(pim);
+					map.put(pathColors[node], pims);
+				} else {
+					map.get(pathColors[node]).add(pim);
+				}
+			}
 		}
-		for (int node = 0; node < p.size(); node++) {
+		return map;
+	}
+
+	private void plotColoredNodePathsFast() {
+		getNodesColorMapFast().forEach( (c, pimList) -> {
 			final XYSeries series = plot.addXYSeries();
+			series.setLegendVisible(false);
+			series.setLabel(c.toString());
 			final List<Double> xc = new ArrayList<>();
 			final List<Double> yc = new ArrayList<>();
-			final PointInImage pim = p.getNode(node);
-			xc.add(pim.x);
-			yc.add(pim.y);
+			pimList.forEach( pim -> {
+				xc.add(pim.getX());
+				yc.add(pim.getY());
+			});
 			series.setValues(xc, yc);
-			series.setLegendVisible(false);
-			final Color c = p.getNodeColor(node);
-			final ColorRGB cc = (c == null) ? defaultColor : new ColorRGB(c.getRed(),
-				c.getGreen(), c.getBlue());
-			series.setStyle(plot.newSeriesStyle(cc, LineStyle.NONE,
+			final ColorRGB cc = new ColorRGB(c.getRed(), c.getGreen(), c.getBlue());
+			series.setStyle(plotService.newSeriesStyle(cc, LineStyle.NONE,
 				MarkerStyle.FILLEDCIRCLE));
-		}
+		});
 	}
 
 	protected void addColorBarLegend(final String colorTable, final double min,
@@ -253,8 +283,8 @@ public class Viewer2D extends TreeColorMapper {
 		if (min >= max || colorTable == null) {
 			return;
 		}
-		chart = getJFreeChart();
-		chart.addSubtitle(getPaintScaleLegend(colorTable, min, max));
+		chart = getChart();
+		chart.getChartPanel().getChart().addSubtitle(getPaintScaleLegend(colorTable, min, max));
 	}
 
 	protected PaintScaleLegend getPaintScaleLegend(final String colorTable, double min, double max) {
@@ -311,6 +341,23 @@ public class Viewer2D extends TreeColorMapper {
 	 */
 	public void add(final Tree tree) {
 		addPaths(tree.list());
+	}
+
+
+	/**
+	 * Adds a collection of trees. Each tree will be rendered using a unique color.
+	 *
+	 * @param trees the list of trees to be plotted
+	 */
+	public void add(final Collection<Tree> trees) {
+		final ColorRGB[] colors = SNTColor.getDistinctColors(trees.size());
+		final ColorRGB prevDefaultColor = defaultColor;
+		int i = 0;
+		for (final Iterator<Tree> it = trees.iterator(); it.hasNext();) {
+			setDefaultColor(colors[i++]);
+			add(it.next());
+		}
+		setDefaultColor(prevDefaultColor);
 	}
 
 	/**
@@ -408,13 +455,9 @@ public class Viewer2D extends TreeColorMapper {
 	 *
 	 * @return the converted viewer
 	 */
+	@Deprecated
 	public JFreeChart getJFreeChart() {
-		if (chart == null) {
-			initPlot();
-			final XYPlotConverter converter = new XYPlotConverter();
-			chart = converter.convert(plot, JFreeChart.class);
-		}
-		return chart;
+		return getChart().getChartPanel().getChart();
 	}
 
 	/**
@@ -423,8 +466,17 @@ public class Viewer2D extends TreeColorMapper {
 	 * @return the converted viewer
 	 */
 	public SNTChart getChart() {
-		return new SNTChart((getTitle() == null || getTitle().trim().isEmpty()) ? "Reconstruction Plotter" : getTitle(),
-				getJFreeChart());
+		if (chart == null) {
+			initPlot();
+			final XYPlotConverter converter = new XYPlotConverter();
+			chart = new SNTChart(
+					(getTitle() == null || getTitle().trim().isEmpty()) ? "Reconstruction Plotter" : getTitle(),
+					converter.convert(plot, JFreeChart.class));
+		}
+		chart.setAxesVisible(getAxesVisible());
+		chart.setOutlineVisible(getOutlineVisible());
+		chart.setGridlinesVisible(getGridlinesVisible());
+		return chart;
 	}
 
 	/**
@@ -433,19 +485,10 @@ public class Viewer2D extends TreeColorMapper {
 	 * @param show if true, plot is displayed
 	 * @return the current plot
 	 */
-	public XYPlot getPlot(final boolean show) {
+	public XYPlot getPlot() {
 		initPlot();
 		plot.yAxis().setAutoRange();
 		plot.xAxis().setAutoRange();
-		if (show) {
-			final SNTChart frame = getChart();
-			frame.setAxesVisible(visibleAxes);
-			frame.setGridlinesVisible(visibleGridLines);
-			frame.setOutlineVisible(visibleOutline);
-			frame.getChartPanel().setBackground(null); // transparent
-			frame.setBackground(Color.WHITE);
-			frame.show(600, 450);
-		}
 		return plot;
 	}
 
@@ -497,7 +540,17 @@ public class Viewer2D extends TreeColorMapper {
 
 	/** Displays the current plot on a dedicated frame */
 	public void show() {
-		getPlot(true);
+		getChart().show();
+	}
+
+	/**
+	 * Displays the current plot on a dedicated frame *
+	 * 
+	 * @param width  the preferred frame width
+	 * @param height the preferred frame height
+	 */
+	public void show(final int width, final int height) {
+		getChart().show(width, height);
 	}
 
 	public void setGridlinesVisible(final boolean visible) {
@@ -510,6 +563,18 @@ public class Viewer2D extends TreeColorMapper {
 
 	public void setOutlineVisible(final boolean visible) {
 		visibleOutline = visible;
+	}
+
+	private boolean getGridlinesVisible() {
+		return visibleGridLines;
+	}
+
+	private boolean getAxesVisible() {
+		return visibleAxes;
+	}
+
+	private boolean getOutlineVisible() {
+		return visibleOutline;
 	}
 
 	/* IDE debug method */

@@ -1,4 +1,4 @@
-<p align="center"><img src="https://imagej.net/media/logos/snt.png" alt="SNT" width="150"></p>
+<p align="center"><img src="https://imagej.net/media/icons/snt.png" alt="SNT" width="150"></p>
 <h1 align="center">Notes</h1>
 
 SNT is both a scripting library and a GUI program. More formally, it is a collection of [SciJava](https://scijava.org/) commands (plugins), organized around a common API. The GUI is written in Swing.
@@ -24,7 +24,7 @@ SNT is associated with several publications. Please cite the appropriate manuscr
 
 The *SNT* framework is described in:
 
-- Arshadi C, Günther U, Eddison M, Kyle I. S. Harrington KIS, Ferreira T. [SNT: A Unifying Toolbox for Quantification of Neuronal Anatomy](https://doi.org/10.1101/2020.07.13.179325). *Nature Method*s, in press.  https://doi.org/10.1038/s41592-021-01105-7
+- Arshadi C, Günther U, Eddison M, Harrington KIS, Ferreira TA. [SNT: A Unifying Toolbox for Quantification of Neuronal Anatomy](https://doi.org/10.1038/s41592-021-01105-7). *Nature Methods*, 18, 374–377 (2021).  https://doi.org/10.1038/s41592-021-01105-7 ([PDF](https://rdcu.be/cUyNP)
 
 The _Sholl Analysis_ plugin is described in:
 
@@ -63,6 +63,7 @@ Key aspects of SNT are implemented from published literature:
 |                                                              |                                                              |
 | [L-measure](http://cng.gmu.edu:8080/Lm/) metrics             | Scorcioni, R., Polavaram, S., & Ascoli, G. A. (2008). L-Measure: a  web-accessible tool for the analysis, comparison and search of digital  reconstructions of neuronal morphologies. *Nature Protocols*, 3(5), 866. https://doi.org/10.1038/nprot.2008.51 |
 | [Sholl-based metrics](https://imagej.net/Sholl.html#Metrics) | Ferreira, T., Blackman, A., Oyrer, J. *et al.* (2014). Neuronal morphometry directly from bitmap images. *Nature Methods*, 11, 982–984 . https://doi.org/10.1038/nmeth.3125<br/>Milosević, N.T. & Ristanović, D. (2007). The Sholl analysis of neuronal cell images: semi-log or log-log method? *Journal of Theoretical Biology* 245, 130–140. https://doi.org/10.1016/j.jtbi.2006.09.022<br/>Ristanović,  D.,  Milosević,  N.T.  &  Stulić,  V.  (2006). Application  of  modified  Sholl  analysis  to  neuronal  dendritic arborization of the cat spinal cord. *Journal of Neuroscience Methods* 158, 2120–218. https://doi.org/10.1016/j.jneumeth.2006.05.030 |
+| Distinct colors (SNT's palette of discriminatory colors) | K. Kelly (1965): Twenty-two colors of maximum contrast. Color Eng., 3(6), 1965. ([PDF](http://www.iscc.org/pdf/PC54_1724_001.pdf))<br/>Paul Green-Armytage, "A Colour Alphabet and the Limits of Colour Coding". Colour: Design & Creativity (5) (2010): 10, 1-23 ([PDF](https://eleanormaclure.files.wordpress.com/2011/03/colour-coding.pdf)) |
 
 
 

@@ -2,7 +2,7 @@
  * #%L
  * Fiji distribution of ImageJ for the life sciences.
  * %%
- * Copyright (C) 2010 - 2021 Fiji developers.
+ * Copyright (C) 2010 - 2022 Fiji developers.
  * %%
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as
@@ -60,7 +60,8 @@ public class FillManagerUI extends JDialog implements PathAndFillListener,
 {
 
 	private static final long serialVersionUID = 1L;
-	protected static final String FILLING_URI = "https://imagej.net/SNT:_Step-By-Step_Instructions#Filling";
+	protected static final String FILLING_URI = "https://imagej.net/plugins/snt/step-by-step-instructions#filling";
+	private static final int STATUS_MARGIN = 2;
 	private static final int MARGIN = 10;
 
 	public enum State {READY, STARTED, ENDED, LOADED, STOPPED}
@@ -96,7 +97,7 @@ public class FillManagerUI extends JDialog implements PathAndFillListener,
 	/**
 	 * Instantiates a new Fill Manager Dialog
 	 *
-	 * @param plugin the the {@link SNT} instance to be associated
+	 * @param plugin the {@link SNT} instance to be associated
 	 *               with this FillManager. It is assumed that its {@link SNTUI} is
 	 *               available.
 	 */
@@ -145,7 +146,7 @@ public class FillManagerUI extends JDialog implements PathAndFillListener,
 
 		final JPanel distancePanel = new JPanel(new GridBagLayout());
 		final GridBagConstraints gdb = GuiUtils.defaultGbc();
-		cursorThresholdChoice = new JRadioButton("Set by clicking on traced strucure (preferred)"); // dummy. the default
+		cursorThresholdChoice = new JRadioButton("Set by clicking on traced structure (preferred)"); // dummy. the default
 
 		final JPanel t1Panel = leftAlignedPanel();
 		t1Panel.add(cursorThresholdChoice);
@@ -195,20 +196,18 @@ public class FillManagerUI extends JDialog implements PathAndFillListener,
 		manualThresholdApplyButton.setEnabled(manualThresholdChoice.isSelected());
 		exploredThresholdApplyButton.setEnabled(exploredThresholdChoice.isSelected());
 
-		addSeparator(" Rendering Options:", c);
+		addSeparator(" Performance Impacting Options:", c);
 
-		transparentCheckbox = new JCheckBox(" Transparent overlay (may slow down filling)");
+		transparentCheckbox = new JCheckBox("Transparent overlay");
+		transparentCheckbox.setToolTipText("Enabling this option allows you better inspect fills,\nbut may slow down filling");
 		transparentCheckbox.addActionListener(e -> plugin.setFillTransparent(transparentCheckbox.isSelected()));
 		final JPanel transparencyPanel = leftAlignedPanel();
 		transparencyPanel.add(transparentCheckbox);
 		add(transparencyPanel, c);
 		c.gridy++;
-
-		addSeparator(" Misc. Options:", c);
-
-		storeExtraNodesCheckbox = new JCheckBox(" Store above-threshold nodes (may impact performance)");
+		storeExtraNodesCheckbox = new JCheckBox(" Store above-threshold nodes");
 		storeExtraNodesCheckbox.addActionListener(e -> plugin.setStoreExtraFillNodes(storeExtraNodesCheckbox.isSelected()));
-		storeExtraNodesCheckbox.setToolTipText("Enabling this option lets you resume progress with the same Fill");
+		storeExtraNodesCheckbox.setToolTipText("Enabling this option lets you resume progress with the same fill,\nbut may impact performance");
 		final JPanel storeExtraNodesPanel = leftAlignedPanel();
 		storeExtraNodesPanel.add(storeExtraNodesCheckbox);
 		add(storeExtraNodesPanel, c);
@@ -301,10 +300,10 @@ public class FillManagerUI extends JDialog implements PathAndFillListener,
 	private JPanel statusPanel() {
 		final JPanel statusPanel = new JPanel();
 		statusPanel.setLayout(new BorderLayout());
-		statusPanel.setBorder(BorderFactory.createEmptyBorder(MARGIN, MARGIN, MARGIN, MARGIN));
+		statusPanel.setBorder(BorderFactory.createEmptyBorder(STATUS_MARGIN, STATUS_MARGIN, STATUS_MARGIN, STATUS_MARGIN));
 		statusText = new JLabel("Loading Fill Manager...");
 		statusText.setBorder(BorderFactory.createCompoundBorder(BorderFactory.createBevelBorder(BevelBorder.LOWERED),
-				BorderFactory.createEmptyBorder(MARGIN, MARGIN, MARGIN, MARGIN)));
+				BorderFactory.createEmptyBorder(STATUS_MARGIN, STATUS_MARGIN, STATUS_MARGIN, STATUS_MARGIN)));
 		statusPanel.add(statusText, BorderLayout.CENTER);
 		startFill = GuiUtils.smallButton("Start");
 		startFill.addActionListener(this);
@@ -517,7 +516,7 @@ public class FillManagerUI extends JDialog implements PathAndFillListener,
 				} else  {
 					final int ans = gUtils.yesNoDialog("There are no paths selected in Path Manager. Would you like to "
 							+ "fill all paths? Alternatively, you can dismiss this prompt, select subsets in the Path "
-							+ "Manager list, and re-run. ", "Fill All Paths?", "Yes. Fill all.", "No. Let me select subsets.");
+							+ "Manager list, and rerun. ", "Fill All Paths?", "Yes. Fill all.", "No. Let me select subsets.");
 					if (ans == JOptionPane.YES_OPTION) {
 						plugin.initPathsToFill(new HashSet<>(plugin.getUI().getPathManager().getSelectedPaths(true)));
 						applyCheckboxSelections();
@@ -807,7 +806,6 @@ public class FillManagerUI extends JDialog implements PathAndFillListener,
 
 	/* IDE debug method */
 	public static void main(final String[] args) {
-		GuiUtils.setLookAndFeel();
 		final ImageJ ij = new ImageJ();
 		ij.ui().showUI();
 		final ImagePlus imp = new ImagePlus();

@@ -24,8 +24,8 @@ import sc.fiji.snt.viewer.*
 import ij3d.Image3DUniverse;
 import org.scijava.vecmath.Color3f;
 
-// Documentation Resources: https://imagej.net/SNT:_Scripting
-// Latest SNT API: https://morphonets.github.io/SNT/
+// Documentation Resources: https://imagej.net/plugins/snt/scripting
+// Latest SNT API: https://javadoc.scijava.org/SNT/
 
 def drawDisks(path, img, min, max) 
 {

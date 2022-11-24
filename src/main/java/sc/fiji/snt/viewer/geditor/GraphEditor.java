@@ -2,7 +2,7 @@
  * #%L
  * Fiji distribution of ImageJ for the life sciences.
  * %%
- * Copyright (C) 2010 - 2021 Fiji developers.
+ * Copyright (C) 2010 - 2022 Fiji developers.
  * %%
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as
@@ -33,7 +33,6 @@ import com.mxgraph.util.mxEventSource.mxIEventListener;
 import com.mxgraph.util.mxUndoableEdit.mxUndoableChange;
 import com.mxgraph.view.mxGraph;
 import com.mxgraph.view.mxStylesheet;
-import net.imagej.lut.LUTService;
 import net.imglib2.display.ColorTable;
 import org.jfree.chart.ChartPanel;
 import org.jfree.chart.JFreeChart;
@@ -47,6 +46,8 @@ import org.scijava.command.Command;
 import org.scijava.command.CommandService;
 import org.scijava.plugin.Parameter;
 import org.scijava.prefs.PrefService;
+
+import sc.fiji.snt.SNTUtils;
 import sc.fiji.snt.analysis.TreeColorMapper;
 import sc.fiji.snt.analysis.graph.AnnotationGraph;
 import sc.fiji.snt.gui.GuiUtils;
@@ -195,6 +196,11 @@ public class GraphEditor extends JPanel
 	public void setContext(final Context context) {
 		if (context == null) throw new NullContextException("Context cannot be null!");
 		context.inject(this);
+	}
+
+	private Context getContext() {
+		if (context == null) setContext(SNTUtils.getContext());
+		return context;
 	}
 
 	private int getDefaultFontSizeInGUI() {
@@ -758,7 +764,7 @@ public class GraphEditor extends JPanel
 					} else if (key.toLowerCase().contains("grouped")) {
 						final Map<String, Object> inputs = new HashMap<>();
 						inputs.put("adapter", graphComponent.getGraph());
-						final CmdRunner runner = new CmdRunner(context.getService(CommandService.class),
+						final CmdRunner runner = new CmdRunner(getContext().getService(CommandService.class),
 								mxCircleLayoutGroupedCmd.class, true, inputs);
 						runner.execute();
 					} else {
@@ -975,7 +981,7 @@ public class GraphEditor extends JPanel
 	}
 
 	public void setLegend(final String colorTable, final String label, double min, double max) {
-		final TreeColorMapper lutRetriever = new TreeColorMapper(new Context(LUTService.class));
+		final TreeColorMapper lutRetriever = new TreeColorMapper(getContext());
 		final ColorTable cTable = lutRetriever.getColorTable(colorTable);
 		setLegend(cTable, label, min, max);
 	}

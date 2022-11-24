@@ -2,7 +2,7 @@
  * #%L
  * Fiji distribution of ImageJ for the life sciences.
  * %%
- * Copyright (C) 2010 - 2021 Fiji developers.
+ * Copyright (C) 2010 - 2022 Fiji developers.
  * %%
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as
@@ -43,11 +43,13 @@ import java.awt.Cursor;
 import java.awt.Desktop;
 import java.awt.Dimension;
 import java.awt.Font;
+import java.awt.FontMetrics;
 import java.awt.Graphics2D;
 import java.awt.GridBagConstraints;
 import java.awt.GridLayout;
 import java.awt.Insets;
 import java.awt.Point;
+import java.awt.Rectangle;
 import java.awt.RenderingHints;
 import java.awt.Toolkit;
 import java.awt.Window;
@@ -61,26 +63,35 @@ import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.awt.event.WindowEvent;
 import java.awt.event.WindowListener;
+import java.awt.geom.Rectangle2D;
 import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.IOException;
 import java.lang.reflect.Field;
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.text.DecimalFormat;
 import java.text.NumberFormat;
 import java.text.ParseException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.Stack;
+import java.util.TreeSet;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 import javax.swing.*;
 import javax.swing.JSpinner.DefaultEditor;
+import javax.swing.border.Border;
 import javax.swing.border.EmptyBorder;
 import javax.swing.colorchooser.AbstractColorChooserPanel;
 import javax.swing.event.DocumentEvent;
@@ -103,6 +114,9 @@ import org.scijava.util.Types;
 
 import sc.fiji.snt.SNTPrefs;
 import sc.fiji.snt.SNTUtils;
+import sc.fiji.snt.analysis.SNTChart;
+import sc.fiji.snt.gui.IconFactory.GLYPH;
+import sc.fiji.snt.util.SNTColor;
 
 /** Misc. utilities for SNT's GUI. */
 public class GuiUtils {
@@ -111,7 +125,7 @@ public class GuiUtils {
 	public static final String LAF_LIGHT_INTJ = FlatIntelliJLaf.NAME;
 	public static final String LAF_DARK = FlatDarkLaf.NAME;
 	public static final String LAF_DARCULA = FlatDarculaLaf.NAME;
-	public static final String LAF_DEFAULT  = "System default";
+	public static final String LAF_DEFAULT  = "Default";
 
 	/** The default sorting weight for the Plugins>Neuroanatomy> submenu */
 	// define it here in case we need to change sorting priority again later on
@@ -119,7 +133,7 @@ public class GuiUtils {
 
 	private static SplashScreen splashScreen;
 	private static LookAndFeel existingLaf;
-	final private Component parent;
+	private Component parent;
 	private JidePopup popup;
 	private boolean popupExceptionTriggered;
 	private int timeOut = 2500;
@@ -127,15 +141,21 @@ public class GuiUtils {
 	private Color foreground = Color.BLACK;
 
 	public GuiUtils(final Component parent) {
-		this.parent = parent;
-		if (parent != null) {
-			background = parent.getBackground();
-			foreground = parent.getForeground();
-		}
+		setParent(parent);
 	}
 
 	public GuiUtils() {
 		this(null);
+	}
+
+	public void setParent(final Component parent) {
+		if (parent == null) {
+			this.parent = null;
+		} else {
+			this.parent = (parent instanceof Container) ? parent : parent.getParent();
+			background = parent.getBackground();
+			foreground = parent.getForeground();
+		}
 	}
 
 	public void error(final String msg) {
@@ -163,12 +183,7 @@ public class GuiUtils {
 				if (popup != null && popup.isVisible())
 					popup.hidePopupImmediately();
 				popup = getPopup(msg);
-				if (location < 0) {
-					popup.showPopup();
-				} else {
-					popup.showPopup(location);
-				}
-				popup.showPopup();
+				popup.showPopup((location < 0) ? SwingConstants.SOUTH_WEST : location, parent);
 			} catch (final Error ignored) {
 				if (!popupExceptionTriggered) {
 					errorPrompt("<HTML><body><div style='width:500;'>Notification mechanism "
@@ -203,23 +218,23 @@ public class GuiUtils {
 		final JLabel label = getLabel(msg);
 		label.setHorizontalAlignment(SwingConstants.CENTER);
 		final JidePopup popup = new JidePopup();
-		popup.getContentPane().add(label);
+		popup.add(label);
 		label.setBackground(background);
 		label.setForeground(foreground);
+		popup.setBackground(background);
 		popup.getContentPane().setBackground(background);
-		popup.setBackground(foreground);
 		if (parent != null) {
 			popup.setOwner(parent);
 			popup.setMaximumSize(parent.getSize());
 		}
 		popup.setFocusable(false);
+		popup.setReturnFocusToOwner(true);
 		popup.setTransient(timeOut > 0);
 		popup.setMovable(false);
 		popup.setDefaultMoveOperation(JidePopup.HIDE_ON_MOVED);
 		popup.setEnsureInOneScreen(true);
 		popup.setTimeout(timeOut);
 		return popup;
-
 	}
 
 	public void setTmpMsgTimeOut(final int mseconds) { // 0: no timeout, always visible
@@ -255,12 +270,12 @@ public class GuiUtils {
 			JOptionPane.QUESTION_MESSAGE, JOptionPane.YES_NO_OPTION, null,
 			buttonLabels);
 		final JDialog d = optionPane.createDialog(parent, title);
-		// Work around prompt being displayed behind splashScreen on MacOS
-		final boolean splashScreenDisplaying = splashScreen != null && splashScreen.isVisible();
-		if (splashScreenDisplaying) splashScreen.setVisible(false);
+//		// Work around prompt being displayed behind splashScreen on MacOS
+//		final boolean splashScreenDisplaying = splashScreen != null && splashScreen.isVisible();
+//		if (splashScreenDisplaying) splashScreen.setVisible(false);
 		makeVisible(d, true);
 		d.dispose();
-		if (splashScreenDisplaying) splashScreen.setVisible(true);
+//		if (splashScreenDisplaying) splashScreen.setVisible(true);
 		final Object result = optionPane.getValue();
 		if (result instanceof Integer) {
 			return (Integer) result;
@@ -277,20 +292,11 @@ public class GuiUtils {
 	}
 
 	private void makeVisible(final JDialog dialog, final boolean forceBringToFront) {
-		dialog.setVisible(true);
-		dialog.toFront();
 		// work around a bug in openjdk and MacOS in which prompts
 		// are not frontmost if the component hierarchy is > 3
-		if (forceBringToFront && PlatformUtils.isMac() && !dialog.hasFocus() && parent != null
-				&& parent instanceof Window) {
-			try {
-				((Window) parent).toBack();
-				Thread.sleep(75);
-				dialog.toFront();
-			} catch (final InterruptedException e) {
-				// ignored
-			}
-		}
+		dialog.setAlwaysOnTop(forceBringToFront && PlatformUtils.isMac());
+		dialog.setVisible(true);
+		dialog.toFront();
 	}
 
 	public boolean getConfirmation(final String msg, final String title) {
@@ -309,7 +315,7 @@ public class GuiUtils {
 
 	public boolean getConfirmation(final String msg, final String title, final String yesLabel, final String noLabel) {
 		final Boolean result = getConfirmation2(msg, title, yesLabel, noLabel);
-		return result != null && result.booleanValue();
+		return result != null && result;
 	}
 
 	public Boolean getConfirmation2(final String msg, final String title, final String yesLabel, final String noLabel) {
@@ -322,7 +328,7 @@ public class GuiUtils {
 	public String getChoice(final String message, final String title, final String[] choices,
 			final String defaultChoice) {
 		final String selectedValue = (String) JOptionPane.showInputDialog(parent, //
-				message, title, JOptionPane.QUESTION_MESSAGE, null, choices,
+				getWrappedText(new JLabel(), message), title, JOptionPane.QUESTION_MESSAGE, null, choices,
 				(defaultChoice == null) ? choices[0] : defaultChoice);
 		return selectedValue;
 	}
@@ -372,10 +378,25 @@ public class GuiUtils {
 		return (String) getObj(promptMsg, promptTitle, defaultValue);
 	}
 
+	public Set<String> getStringSet(final String promptMsg, final String promptTitle,
+			final Collection<String> defaultValues) {
+		final String userString = getString(promptMsg, promptTitle, toString(defaultValues));
+		if (userString == null)
+			return null;
+		final TreeSet<String> uniqueWords = new TreeSet<String>(Arrays.asList(userString.split(",\\s*")));
+		uniqueWords.remove("");
+		return uniqueWords;
+	}
+
 	public Color getColor(final String title, final Color defaultValue) {
 		return SwingColorWidget.showColorDialog(parent, title, defaultValue);
 	}
 
+	/**
+	 * Simplified color chooser for ColorRGB.
+	 *
+	 * @see #getColor(String, Color, String...)
+	 */
 	public ColorRGB getColorRGB(final String title, final Color defaultValue,
 		final String... panes)
 	{
@@ -392,7 +413,8 @@ public class GuiUtils {
 	 * @param panes the panes a list of strings specifying which tabs should be
 	 *          displayed. In most platforms this includes: "Swatches", "HSB" and
 	 *          "RGB". Note that e.g., the GTK L&amp;F may only include the
-	 *          default GtkColorChooser pane
+	 *          default GtkColorChooser pane. Set to null to include all available
+	 *          panes.
 	 * @return the color
 	 */
 	public Color getColor(final String title, final Color defaultValue,
@@ -486,10 +508,12 @@ public class GuiUtils {
 		final List<String> allowedExtensions)
 	{
 		File chosenFile = null;
-		final JFileChooser chooser = fileChooser(title, file, JFileChooser.FILES_ONLY, allowedExtensions);
+		final JFileChooser chooser = fileChooser(title, file, JFileChooser.SAVE_DIALOG, JFileChooser.FILES_ONLY, allowedExtensions);
 		if (chooser.showSaveDialog(parent) == JFileChooser.APPROVE_OPTION) {
 			chosenFile = chooser.getSelectedFile();
-			if (chosenFile != null && allowedExtensions != null && allowedExtensions.size() == 1) {
+			if (chosenFile == null)
+				return null;
+			if (allowedExtensions != null && allowedExtensions.size() == 1) {
 				final String path = chosenFile.getAbsolutePath();
 				final String extension = allowedExtensions.get(0);
 				if (!path.endsWith(extension))
@@ -510,15 +534,15 @@ public class GuiUtils {
 		final List<String> allowedExtensions)
 	{
 		final JFileChooser chooser = fileChooser(title, file,
-			JFileChooser.FILES_ONLY, allowedExtensions);
+			JFileChooser.OPEN_DIALOG, JFileChooser.FILES_ONLY, allowedExtensions);
 		if (chooser.showOpenDialog(parent) == JFileChooser.APPROVE_OPTION)
 			return chooser.getSelectedFile();
 		return null;
 	}
 
 	@SuppressWarnings("unused")
-	private File chooseDirectory(final String title, final File file) {
-		final JFileChooser chooser = fileChooser(title, file,
+	private File openDirectory(final String title, final File file) {
+		final JFileChooser chooser = fileChooser(title, file, JFileChooser.OPEN_DIALOG,
 			JFileChooser.DIRECTORIES_ONLY, null);
 		if (chooser.showOpenDialog(parent) == JFileChooser.APPROVE_OPTION)
 			return chooser.getSelectedFile();
@@ -526,19 +550,20 @@ public class GuiUtils {
 	}
 
 	private JFileChooser fileChooser(final String title, final File file,
-		final int type, final List<String> allowedExtensions)
+		final int type, final int selectionMode, final List<String> allowedExtensions)
 	{
 		final JFileChooser chooser = getDnDFileChooser();
-		if (file != null && file.exists()) {
+		if (file != null) {
 			if (file.isDirectory()) {
 				chooser.setCurrentDirectory(file);
 			} else {
 				chooser.setCurrentDirectory(file.getParentFile());
-				chooser.setSelectedFile(file);
 			}
+			chooser.setSelectedFile(file);
 		}
 		chooser.setDialogTitle(title);
-		chooser.setFileSelectionMode(type);
+		chooser.setFileSelectionMode(selectionMode);
+		chooser.setDialogType(type);
 		if (allowedExtensions != null && !allowedExtensions.isEmpty()) {
 			chooser.setFileFilter(new FileFilter() {
 
@@ -638,7 +663,59 @@ public class GuiUtils {
 		return (Integer) result;
 	}
 
-	public void addTooltip(final JComponent c, final String text) {
+	public static void displayBanner(final String msg, final Color background, final Component parent) {
+		final JLabel label = new JLabel(msg);
+		label.setHorizontalAlignment(SwingConstants.CENTER);
+		if (!msg.startsWith("<HTML>"))
+			label.setFont(label.getFont().deriveFont(label.getFont().getSize2D() * 2.5f));
+		final int margin = label.getFontMetrics(label.getFont()).stringWidth("XX");
+		label.setBorder(BorderFactory.createEmptyBorder(margin, margin, margin, margin));
+		final JidePopup popup = new JidePopup();
+		popup.add(label);
+		final MouseAdapter adapter = new MouseAdapter() {
+			@Override
+			public void mouseMoved(final MouseEvent e) {
+				dismiss();
+			}
+			@Override
+			public void mouseClicked(final MouseEvent e) {
+				dismiss();
+			}
+			@Override
+			public void mouseDragged(MouseEvent e) {
+				dismiss();
+			}
+			@Override
+			public void mousePressed(MouseEvent e) {
+				dismiss();
+			}
+			void dismiss() {
+				popup.removeMouseListener(this);
+				parent.removeMouseListener(this);
+				popup.hidePopup(true);
+				parent.requestFocusInWindow();
+			}
+		};
+		popup.addMouseListener(adapter);
+		if (parent != null) {
+			popup.setOwner(parent);
+			parent.addMouseListener(adapter);
+		}
+		label.setForeground(SNTColor.contrastColor(background));
+		label.setBackground(background);
+		popup.setBackground(background);
+		popup.getContentPane().setBackground(background);
+		popup.setReturnFocusToOwner(true);
+		popup.setTransient(true);
+		popup.setMovable(false);
+		popup.setDefaultMoveOperation(JidePopup.HIDE_ON_MOVED);
+		popup.setTimeout(4000);
+		SwingUtilities.invokeLater(() -> {
+			popup.showPopup(SwingConstants.CENTER, parent);
+		});
+	}
+
+	public static void addTooltip(final JComponent c, final String text) {
 		final int length = c.getFontMetrics(c.getFont()).stringWidth(text);
 		final String tooltipText = "<html>" + ((length > 500) ? "<body><div style='width:500;'>" : "") + text;
 		if (c instanceof JPanel) {
@@ -719,13 +796,16 @@ public class GuiUtils {
 		final JLabel ijDetails = leftAlignedLabel(
 				"ImageJ " + ImageJ.VERSION + ImageJ.BUILD + "  |  Java " + System.getProperty("java.version"), "", true);
 		ijDetails.setAlignmentX(JLabel.CENTER_ALIGNMENT);
+		ijDetails.setToolTipText("Displays detailed System Information");
 		ijDetails.addMouseListener(new MouseAdapter() {
 			@Override
 			public void mouseClicked(final MouseEvent e) {
 				if (IJ.getInstance() == null)
 					new ij.plugin.JavaProperties().run("");
-				else
-					IJ.doCommand("ImageJ Properties");
+				else {
+					//IJ.doCommand("ImageJ Properties");
+					IJ.doCommand("System Information");
+				}
 			}
 
 		});
@@ -735,13 +815,13 @@ public class GuiUtils {
 		side.add(urls);
 		JLabel url = leftAlignedLabel("Release Notes   ", "https://github.com/morphonets/SNT/releases", true);
 		urls.add(url);
-		url = leftAlignedLabel("Documentation   ", "https://imagej.net/SNT", true);
+		url = leftAlignedLabel("Documentation   ", "https://imagej.net/plugins/snt/", true);
 		urls.add(url);
 		url = leftAlignedLabel("Forum   ", "https://forum.image.sc/tags/snt", true);
 		urls.add(url);
 		url = leftAlignedLabel("GitHub   ", "https://github.com/morphonets/SNT/", true);
 		urls.add(url);
-		url = leftAlignedLabel("Manuscript", "https://doi.org/10.1038/s41592-021-01105-7", true);
+		url = leftAlignedLabel("Manuscript", "http://dx.doi.org/10.1038/s41592-021-01105-7", true);
 		urls.add(url);
 		final JOptionPane optionPane = new JOptionPane(main, JOptionPane.PLAIN_MESSAGE, JOptionPane.DEFAULT_OPTION);
 		final JDialog d = optionPane.createDialog("About SNT...");
@@ -752,7 +832,41 @@ public class GuiUtils {
 		return d;
 	}
 
+	public void showDirectory(final File file) {
+		final File dir = (file.isDirectory()) ? file : file.getParentFile();
+		try {
+			Desktop.getDesktop().open(dir); // TODO: Move to java9: Desktop.getDesktop().browseFileDirectory(file);
+		} catch (final UnsupportedOperationException ue) {
+			if (PlatformUtils.isLinux())
+				try {
+					Runtime.getRuntime().exec(new String[] { "xdg-open", dir.getAbsolutePath() });
+				} catch (final Exception ignored) {
+					error("Directory does not seem to be accessible.");
+				}
+		} catch (final NullPointerException | IllegalArgumentException | IOException iae) {
+			error("Directory does not seem to be accessible.");
+		}
+	}
+
 	/* Static methods */
+	public static <T> String toString(final Iterable<T> iterable) {
+		if (iterable == null) {
+			return "";
+		}
+		final Iterator<T> i = iterable.iterator();
+		if (!i.hasNext()) {
+			return "";
+		}
+		final StringBuilder sb = new StringBuilder();
+		while (true) {
+			final T t = i.next();
+			sb.append(t);
+			if (!i.hasNext()) {
+				return sb.toString();
+			}
+			sb.append(", ");
+		}
+	}
 
 	public static void initSplashScreen() {
 		splashScreen = new SplashScreen();
@@ -797,8 +911,14 @@ public class GuiUtils {
 		if (vgap) c.insets.top = previousTopGap;
 	}
 
-	public static JMenuItem menubarButton(final IconFactory.GLYPH glyphIcon, final JMenuBar menuBar) {
-		final JMenuItem mi = new JMenuItem(IconFactory.getMenuIcon(glyphIcon)) {
+	public static void addSeparator(final JPopupMenu menu, final String header) {
+		final JLabel label = leftAlignedLabel(header, false);
+		if (menu.getComponentCount() > 1) menu.addSeparator();
+		menu.add(label);
+	}
+
+	public static JButton menubarButton(final IconFactory.GLYPH glyphIcon, final Action action) {
+		final JButton mi = new JButton(action) {
 			private static final long serialVersionUID = 406126659895081426L;
 
 			@Override
@@ -808,9 +928,46 @@ public class GuiUtils {
 				d1.width = d2.width;
 				return d1;
 			}
+			@Override
+			public Icon getIcon() {
+				return IconFactory.getMenuIcon(glyphIcon);
+			}
+			@Override
+			public String getText() {
+				return null;
+			}
+			@Override
+			public Border getBorder() {
+				return null;
+			}
+			@Override
+			public boolean isBorderPainted() {
+				return false;
+			}
+			@Override
+			public boolean isBackgroundSet() {
+				return false;
+			}
+			@Override
+			public Color getBackground() {
+				return null;
+			}
+			@Override
+			public boolean isOpaque() {
+				return false;
+			}
+			@Override
+			public boolean isContentAreaFilled() {
+				return false;
+			}
+
 		};
-		menuBar.add(mi);
 		return mi;
+	}
+
+	public static int renderedWidth(final String text) {
+		final JLabel l = new JLabel();
+		return l.getFontMetrics(l.getFont()).stringWidth(text);
 	}
 
 	public static JLabel leftAlignedLabel(final String text, final boolean enabled) {
@@ -826,6 +983,7 @@ public class GuiUtils {
 		final Color fg = (enabled) ? label.getForeground() : getDisabledComponentColor(); // required
 		label.setForeground(fg);														// for MACOS!?
 		if (uri != null && Desktop.isDesktopSupported()) {
+			//label.setIcon(IconFactory.getIcon(GLYPH.EXTERNAL_LINK, label.getFont().getSize2D() *.75f, label.getForeground()));
 			label.addMouseListener(new MouseAdapter() {
 				final int w = label.getFontMetrics(label.getFont()).stringWidth(label.getText());
 
@@ -852,12 +1010,29 @@ public class GuiUtils {
 		return label;
 	}
 
-	private static void openURL(final String uri) {
+	public void searchForum(final String query) {
+			String url;
+			try {
+				url = "https://forum.image.sc/search?q=" + URLEncoder.encode(query, StandardCharsets.UTF_8.toString());
+			} catch (final Exception ignored) {
+				url = query.trim().replace(" ", "%20");
+			}
+			openURL(url);
+	}
+
+	public static void openURL(final String uri) {
 		try {
 			Desktop.getDesktop().browse(new URI(uri));
 		} catch (IOException | URISyntaxException ex) {
-			if (uri != null && !uri.isEmpty())
-				SNTUtils.log("Could not open " + uri);
+			if (uri != null && !uri.isEmpty()) {
+				final JTextPane f = new JTextPane(); // Error message with selectable text
+				f.setContentType("text/html");
+				f.setText("<HTML>Web page could not be open. Please visit<br>" + uri + "<br>using your web browser.");
+				f.setEditable(false);
+				f.setBackground(null);
+				f.setBorder(null);
+				JOptionPane.showMessageDialog(null, f, "Error", JOptionPane.ERROR_MESSAGE);
+			}
 		}
 	}
 
@@ -921,7 +1096,7 @@ public class GuiUtils {
 		final List<JMenuItem> list = new ArrayList<>();
 		for (int i = 0; i < menuBar.getMenuCount(); i++) {
 			final JMenu menu = menuBar.getMenu(i);
-			getMenuItems(menu, list);
+			if (menu != null) getMenuItems(menu, list);
 		}
 		return list;
 	}
@@ -1047,70 +1222,64 @@ public class GuiUtils {
 
 	public static JMenu helpMenu() {
 		final JMenu helpMenu = new JMenu("Help");
-		final String URL = "https://imagej.net/SNT";
+		final String URL = "https://imagej.net/plugins/snt/";
 		JMenuItem mi = menuItemTriggeringURL("Main Documentation Page", URL);
-		mi.setIcon(IconFactory.getMenuIcon(IconFactory.GLYPH.HOME));
+		mi.setIcon(IconFactory.getMenuIcon(GLYPH.HOME));
 		helpMenu.add(mi);
 		helpMenu.addSeparator();
-		mi = menuItemTriggeringURL("User Manual", URL + ":_Manual");
-		mi.setIcon(IconFactory.getMenuIcon(IconFactory.GLYPH.BOOK_READER));
+		mi = menuItemTriggeringURL("User Manual", URL + "manual");
+		mi.setIcon(IconFactory.getMenuIcon(GLYPH.BOOK_READER));
 		helpMenu.add(mi);
-		mi = menuItemTriggeringURL("Screencasts", URL + ":_Screencasts");
-		mi.setIcon(IconFactory.getMenuIcon(IconFactory.GLYPH.VIDEO));
+		mi = menuItemTriggeringURL("Screencasts", URL + "screencasts");
+		mi.setIcon(IconFactory.getMenuIcon(GLYPH.VIDEO));
 		helpMenu.add(mi);
-		mi = menuItemTriggeringURL("Step-by-step Instructions", URL + ":_Step-By-Step_Instructions");
-		mi.setIcon(IconFactory.getMenuIcon(IconFactory.GLYPH.FOOTPRINTS));
+		mi = menuItemTriggeringURL("Step-by-step Instructions", URL + "step-by-step-instructions");
+		mi.setIcon(IconFactory.getMenuIcon(GLYPH.FOOTPRINTS));
 		helpMenu.add(mi);
 
 		helpMenu.addSeparator();
-		mi = menuItemTriggeringURL("Analysis", URL + ":_Analysis");
-		mi.setIcon(IconFactory.getMenuIcon(IconFactory.GLYPH.CHART));
+		mi = menuItemTriggeringURL("Analysis", URL + "analysis");
+		mi.setIcon(IconFactory.getMenuIcon(GLYPH.CHART));
 		helpMenu.add(mi);
-		mi = menuItemTriggeringURL("Reconstruction Viewer", URL + ":_Reconstruction_Viewer");
-		mi.setIcon(IconFactory.getMenuIcon(IconFactory.GLYPH.CUBE));
+		mi = menuItemTriggeringURL("Reconstruction Viewer", URL + "reconstruction-viewer");
+		mi.setIcon(IconFactory.getMenuIcon(GLYPH.CUBE));
 		helpMenu.add(mi);
 
 		helpMenu.addSeparator();
-		mi = menuItemTriggeringURL("List of Shortcuts", URL + ":_Key_Shortcuts");
-		mi.setIcon(IconFactory.getMenuIcon(IconFactory.GLYPH.KEYBOARD));
+		mi = menuItemTriggeringURL("List of Shortcuts", URL + "key-shortcuts");
+		mi.setIcon(IconFactory.getMenuIcon(GLYPH.KEYBOARD));
 		helpMenu.add(mi);
 		helpMenu.addSeparator();
 
 		mi = menuItemTriggeringURL("Ask a Question", "https://forum.image.sc/tags/snt");
-		mi.setIcon(IconFactory.getMenuIcon(IconFactory.GLYPH.COMMENTS));
+		mi.setIcon(IconFactory.getMenuIcon(GLYPH.COMMENTS));
 		helpMenu.add(mi);
-		mi = menuItemTriggeringURL("FAQs", URL + ":_FAQ");
-		mi.setIcon(IconFactory.getMenuIcon(IconFactory.GLYPH.QUESTION));
+		mi = menuItemTriggeringURL("FAQs", URL + "faq");
+		mi.setIcon(IconFactory.getMenuIcon(GLYPH.QUESTION));
 		helpMenu.add(mi);
 		mi = menuItemTriggeringURL("Known Issues", "https://github.com/morphonets/SNT/issues");
-		mi.setIcon(IconFactory.getMenuIcon(IconFactory.GLYPH.BUG));
+		mi.setIcon(IconFactory.getMenuIcon(GLYPH.BUG));
 		helpMenu.add(mi);
 		mi = menuItemTriggeringURL("Release Notes", "https://github.com/morphonets/SNT/releases");
-		mi.setIcon(IconFactory.getMenuIcon(IconFactory.GLYPH.NEWSPAPER));
+		mi.setIcon(IconFactory.getMenuIcon(GLYPH.NEWSPAPER));
 		helpMenu.add(mi);
 
 		helpMenu.addSeparator();
-		mi = menuItemTriggeringURL("Scripting", URL + ":_Scripting");
-		mi.setIcon(IconFactory.getMenuIcon(IconFactory.GLYPH.CODE));
-		helpMenu.add(mi);
-		mi = menuItemTriggeringURL("Jupyter Notebooks", "https://github.com/morphonets/SNT/tree/master/notebooks");
-		mi.setIcon(IconFactory.getMenuIcon(IconFactory.GLYPH.SCROLL));
-		helpMenu.add(mi);
+		helpMenu.add(MenuItems.devResourceMain());
+		helpMenu.add(MenuItems.devResourceNotebooks());
+		helpMenu.add(MenuItems.devResourceAPI());
 		helpMenu.addSeparator();
 
-		mi = menuItemTriggeringURL("SNT's API", "https://morphonets.github.io/SNT/");
-		mi.setIcon(IconFactory.getMenuIcon(IconFactory.GLYPH.CODE2));
-		helpMenu.add(mi);
 		mi = menuItemTriggeringURL("SNT's Algorithms", "https://github.com/morphonets/SNT/blob/master/NOTES.md#algorithms");
-		mi.setIcon(IconFactory.getMenuIcon(IconFactory.GLYPH.COGS));
+		mi.setIcon(IconFactory.getMenuIcon(GLYPH.COGS));
 		helpMenu.add(mi);
-		mi = menuItemTriggeringURL("SNT Manuscript", "https://doi.org/10.1101/2020.07.13.179325");
-		mi.setIcon(IconFactory.getMenuIcon(IconFactory.GLYPH.FILE));
+		mi = menuItemTriggeringURL("SNT Manuscript", "http://dx.doi.org/10.1038/s41592-021-01105-7");
+		mi.setIcon(IconFactory.getMenuIcon(GLYPH.FILE));
 		helpMenu.add(mi);
 		helpMenu.addSeparator();
 
 		final JMenuItem about = new JMenuItem("About...");
-		about.setIcon(IconFactory.getMenuIcon(IconFactory.GLYPH.INFO));
+		about.setIcon(IconFactory.getMenuIcon(GLYPH.INFO));
 		about.addActionListener(e -> showAboutDialog());
 		helpMenu.add(about);
 
@@ -1131,7 +1300,14 @@ public class GuiUtils {
 
 		TextFieldWithPlaceholder(final String placeholder) {
 			changePlaceholder(placeholder, true);
-			setBorder(null);
+		}
+
+		Font getPlaceholderFont() {
+			return getFont().deriveFont(Font.ITALIC);
+		}
+
+		String getPlaceholder() {
+			return placeholder;
 		}
 
 		void changePlaceholder(final String placeholder, final boolean overrideInitialPlaceholder) {
@@ -1147,17 +1323,18 @@ public class GuiUtils {
 		@Override
 		protected void paintComponent(final java.awt.Graphics g) {
 			super.paintComponent(g);
-			if (super.getText().isEmpty() && !(FocusManager.getCurrentKeyboardFocusManager().getFocusOwner() == this)) {
+			if (getText().isEmpty()) {
 				final Graphics2D g2 = (Graphics2D) g.create();
-				g2.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING,
-						RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
-				g2.setColor(Color.GRAY);
-				g2.setFont(getFont().deriveFont(Font.ITALIC));
-				g2.drawString(placeholder, 4, g2.getFontMetrics().getHeight());
+				g2.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
+				g2.setColor(getDisabledTextColor());
+				g2.setFont(getPlaceholderFont());
+				final FontMetrics fm = g2.getFontMetrics();
+				final Rectangle2D r = fm.getStringBounds(getPlaceholder(), g2);
+				final int y = (getHeight() - (int) r.getHeight()) / 2 + fm.getAscent();
+				g2.drawString(getPlaceholder(), getInsets().left, y);
 				g2.dispose();
 			}
 		}
-
 	}
 
 	public static Color getDisabledComponentColor() {
@@ -1321,6 +1498,10 @@ public class GuiUtils {
 	public static void setLookAndFeel() {
 		storeExistingLookAndFeel();
 		final String lafName = SNTPrefs.getLookAndFeel(); // never null
+		// If SNT is not using FlatLaf but Fiji is, prefer Fiji choice
+		if (existingLaf instanceof FlatLaf && !lafName.contains("FlatLaf"))
+			return;
+		// Otherwise apply SNT's L&F preference as long as it is valid
 		if (existingLaf == null || !lafName.equals(existingLaf.getName()))
 			setLookAndFeel(SNTPrefs.getLookAndFeel(), false);
 	}
@@ -1377,8 +1558,6 @@ public class GuiUtils {
 
 	private static void storeExistingLookAndFeel() {
 		existingLaf = UIManager.getLookAndFeel();
-		if (existingLaf instanceof FlatLaf) 
-			existingLaf = null;
 	}
 
 	public static void restoreLookAndFeel() {
@@ -1426,11 +1605,15 @@ public class GuiUtils {
 			if (!success) existingLaf = null;
 			break;
 		}
-		if (success && componentsToUpdate != null) {
-			for (final Component component : componentsToUpdate) {
-				if (component == null)
-					continue;
-				final Window window = (component instanceof Window) ? (Window)component
+		if (!success) return false;
+		if (componentsToUpdate == null) {
+			FlatLaf.updateUI();
+		} else {
+			SwingUtilities.invokeLater(() -> {
+				for (final Component component : componentsToUpdate) {
+					if (component == null)
+						continue;
+				final Window window = (component instanceof Window) ? (Window) component
 						: SwingUtilities.windowForComponent(component);
 				try {
 					if (window == null)
@@ -1438,11 +1621,12 @@ public class GuiUtils {
 					else
 						SwingUtilities.updateComponentTreeUI(window);
 				} catch (final Exception ex) {
-					SNTUtils.error("", ex);
+						SNTUtils.error("", ex);
+					}
 				}
-			}
+			});
 		}
-		if (success && persistentChoice) {
+		if (persistentChoice) {
 			SNTPrefs.setLookAndFeel(lookAndFeelName);
 		}
 		return success;
@@ -1529,10 +1713,104 @@ public class GuiUtils {
 		timer.start();
 	}
 
+	public static void tile(final List<? extends Window> windowList) {
+		if (windowList == null || windowList.isEmpty()) return;
+		// FIXME: This is all taken from ij1.
+		final Rectangle screen = ij.gui.GUI.getMaxWindowBounds(ij.IJ.getApplet());
+		final int XSTART = 4, YSTART = 94, GAP = 2;
+		final int titlebarHeight = 40;
+		int minWidth = Integer.MAX_VALUE;
+		int minHeight = Integer.MAX_VALUE;
+		double totalWidth = 0;
+		double totalHeight = 0;
+		for (final Window window : windowList) {
+			final Dimension d = window.getSize();
+			final int w = d.width;
+			final int h = d.height + titlebarHeight;
+			if (w < minWidth)
+				minWidth = w;
+			if (h < minHeight)
+				minHeight = h;
+			totalWidth += w;
+			totalHeight += h;
+		}
+		final int nPics = windowList.size();
+		final double averageWidth = totalWidth / nPics;
+		final double averageHeight = totalHeight / nPics;
+		int tileWidth = (int) averageWidth;
+		int tileHeight = (int) averageHeight;
+		final int hspace = screen.width - 2 * GAP;
+		if (tileWidth > hspace)
+			tileWidth = hspace;
+		final int vspace = screen.height - YSTART;
+		if (tileHeight > vspace)
+			tileHeight = vspace;
+		int hloc, vloc;
+		boolean theyFit;
+		do {
+			hloc = XSTART;
+			vloc = YSTART;
+			theyFit = true;
+			int i = 0;
+			do {
+				i++;
+				if (hloc + tileWidth > screen.width) {
+					hloc = XSTART;
+					vloc = vloc + tileHeight;
+					if (vloc + tileHeight > screen.height)
+						theyFit = false;
+				}
+				hloc = hloc + tileWidth + GAP;
+			} while (theyFit && (i < nPics));
+			if (!theyFit) {
+				tileWidth = (int) (tileWidth * 0.98 + 0.5);
+				tileHeight = (int) (tileHeight * 0.98 + 0.5);
+			}
+		} while (!theyFit);
+		hloc = XSTART;
+		vloc = YSTART;
+		for (final Window window : windowList) {
+			if (hloc + tileWidth > screen.width) {
+				hloc = XSTART;
+				vloc = vloc + tileHeight;
+			}
+			window.setLocation(hloc + screen.x, vloc + screen.y);
+			window.toFront();
+			hloc += tileWidth + GAP;
+		}
+	}
+
 	public JDialog showHTMLDialog(final String msg, final String title, final boolean modal) {
 		final JDialog dialog = new HTMLDialog(msg, title, modal);
 		dialog.setVisible(true);
 		return dialog;
+	}
+
+	public JMenuItem combineChartsMenuItem() {
+		final JMenuItem jmi = new JMenuItem("Combine Plots Into Montage...", IconFactory.getMenuIcon(GLYPH.GRID));
+		jmi.setToolTipText("Combines isolated charts (plots, histograms, etc.) into a grid layout");
+		jmi.addActionListener(e -> combineOpenCharts());
+		return jmi;
+	}
+
+	private void combineOpenCharts() {
+		final List<SNTChart> charts = SNTChart.openCharts().stream().filter(c -> !c.isCombined())
+				.collect(Collectors.toList());
+		if (charts.size() < 2) {
+			error("No charts available: Either no charts are currently open,"
+					+ " or displayed ones cannot be merged. Make sure that at  least"
+					+ " two single charts (histogram, plot, etc.) are open and retry.");
+		} else {
+
+			final Double rUser = getDouble("" + charts.size() + " charts are currently open."
+					+ " Enter the number of rows to be used in the montage (leave empty for default"
+					+ " settings):", "Combine Charts", -1);
+			if (rUser == null)
+				return; // user pressed cancel
+			final int r = (rUser.isNaN()) ? -1 : rUser.intValue();
+			final int c = (r == -1) ? -1 : charts.size() - charts.size() / r + 1;
+			SNTChart.combine(charts, r, c, true).setVisible(true);
+		}
 	}
 
 	/** Tweaked version of ij.gui.HTMLDialog that is aware of parent */
@@ -1587,20 +1865,25 @@ public class GuiUtils {
 			button.addKeyListener(this);
 			editorPane.addKeyListener(this);
 			editorPane.addHyperlinkListener(this);
+			editorPane.setCaretPosition(0); // scroll to top;
 			final JPanel panel = new JPanel();
 			panel.add(button);
 			getContentPane().add(panel, "South");
 			setForeground(Color.black);
 			pack();
 			final Dimension screenD = Toolkit.getDefaultToolkit().getScreenSize();
-			final Dimension dialogD = getSize();
+			final Dimension dialogD = getPreferredSize();
 			final int maxWidth = (int) (Math.min(0.70 * screenD.width, 800)); // max 70% of screen width, but not more
-																				// than 800 pxl
+																				// then 800 pxl
 			if (maxWidth > 400 && dialogD.width > maxWidth)
 				dialogD.width = maxWidth;
 			if (dialogD.height > 0.80 * screenD.height && screenD.height > 400) // max 80% of screen height
 				dialogD.height = (int) (0.80 * screenD.height);
-			setSize(dialogD);
+			int minHeight = editorPane.getFontMetrics(editorPane.getFont()).getHeight() * 10 + panel.getPreferredSize().height;
+			if (dialogD.height < minHeight)
+				dialogD.height = minHeight;
+			setPreferredSize(dialogD);
+			pack(); // Important! or preferred dimensions won't apply
 		}
 
 		public void actionPerformed(final ActionEvent e) {
@@ -1748,6 +2031,74 @@ public class GuiUtils {
 		@Override
 		public void windowDeactivated(final WindowEvent e) {
 			// do nothing
+		}
+
+	}
+
+	public static class MenuItems {
+
+		private MenuItems() {}
+
+		public static JMenuItem devResourceMain() {
+			final JMenuItem jmi = menuItemTriggeringURL("Scripting Documentation", "https://imagej.net/plugins/snt/scripting");
+			jmi.setIcon(IconFactory.getMenuIcon(GLYPH.CODE));
+			return jmi;
+		}
+
+		public static JMenuItem devResourceAPI() {
+			final JMenuItem jmi = menuItemTriggeringURL("API", "https://javadoc.scijava.org/SNT/");
+			jmi.setIcon(IconFactory.getMenuIcon(GLYPH.CODE2));
+			return jmi;
+		}
+
+		public static JMenuItem devResourceNotebooks() {
+			final JMenuItem jmi = menuItemTriggeringURL("Jupyter Notebooks", "https://github.com/morphonets/SNT/tree/master/notebooks");
+			jmi.setIcon(IconFactory.getMenuIcon(GLYPH.SCROLL));
+			return jmi;
+		}
+
+		public static JMenuItem convexHull() {
+			final JMenuItem jmi = new JMenuItem("Convex Hull...", IconFactory.getMenuIcon(GLYPH.DICE_20));
+			jmi.setToolTipText(
+					"2D/3D convex hull measurement(s).\nMetrics for estimation of dendritic or pre-synaptic fields");
+			return jmi;
+		}
+
+		public static JMenuItem createDendrogram() {
+			final JMenuItem jmi = new JMenuItem("Create Dendrogram", IconFactory.getMenuIcon(GLYPH.DIAGRAM));
+			jmi.setToolTipText("Display reconstructions in Graph Viewer");
+			return jmi;
+		}
+
+		public static JMenuItem measureOptions() {
+			final JMenuItem jmi = new JMenuItem("Measure...", IconFactory.getMenuIcon(GLYPH.TABLE));
+			jmi.setToolTipText("<HTML>Compute detailed metrics from single cells.<br>"
+					+ "Hold either Shift or Alt to use legacy prompt");
+			return jmi;
+		}
+
+		public static JMenuItem measureQuick() {
+			final JMenuItem jmi = new JMenuItem("Quick Measurements", IconFactory.getMenuIcon(GLYPH.ROCKET));
+			jmi.setToolTipText("Run simplified \"Measure...\" calls using commonly used metrics");
+			return jmi;
+		}
+
+		public static JMenuItem saveTablesAndPlots(final GLYPH glyph) {
+			final JMenuItem jmi = new JMenuItem("Save Tables & Analysis Plots...", IconFactory.getMenuIcon(glyph));
+			jmi.setToolTipText("Save all tables, plots, and charts currently open");
+			return jmi;
+		}
+
+		public static JMenuItem shollAnalysis() {
+			final JMenuItem jmi = new JMenuItem("Sholl Analysis...", IconFactory.getMenuIcon(GLYPH.BULLSEYE));
+			jmi.setToolTipText("Sholl analysis using pre-defined focal points");
+			return jmi;
+		}
+
+		public static JMenuItem strahlerAnalysis() {
+			final JMenuItem jmi = new JMenuItem("Strahler Analysis...", IconFactory.getMenuIcon(GLYPH.BRANCH_CODE));
+			jmi.setToolTipText("Horton–Strahler measures of branching complexity");
+			return jmi;
 		}
 
 	}

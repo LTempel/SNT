@@ -2,7 +2,7 @@
  * #%L
  * Fiji distribution of ImageJ for the life sciences.
  * %%
- * Copyright (C) 2010 - 2021 Fiji developers.
+ * Copyright (C) 2010 - 2022 Fiji developers.
  * %%
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as
@@ -63,10 +63,9 @@ public class OpenDatasetCmd extends CommonDynamicCmd implements Command {
 //			final Dataset ds = ioService.open(file.getAbsolutePath());
 //			final ImagePlus imp = convertService.convert(ds, ImagePlus.class);
 //			snt.initialize(imp);
-			final ImagePlus imp = IJ.openImage(file.getAbsolutePath());
-			if (imp.getType()==ImagePlus.COLOR_RGB) {
-				error("Invalid Image: RGB images not supported.");
-			} else {
+			ImagePlus imp = IJ.openImage(file.getAbsolutePath());
+			imp = comvertInPlaceToCompositeAsNeeded(imp);
+			if (imp.getType() != ImagePlus.COLOR_RGB) {
 				snt.initialize(imp);
 			}
 		}

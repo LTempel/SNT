@@ -2,7 +2,7 @@
  * #%L
  * Fiji distribution of ImageJ for the life sciences.
  * %%
- * Copyright (C) 2010 - 2021 Fiji developers.
+ * Copyright (C) 2010 - 2022 Fiji developers.
  * %%
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as
@@ -298,7 +298,7 @@ public class ColorMenu extends JMenu {
 					: "New color for SWC Type: " + Path.getSWCtypeName(swcColor.type(),
 						true);
 				MenuSelectionManager.defaultManager().clearSelectedPath();
-				final Color c = gUtils.getColor(promptTitle, swcColor.color(), "HSB");
+				final Color c = gUtils.getColor(promptTitle, swcColor.color(), (String[])null);
 				if (c != null && !c.equals(swcColor.color())) {
 					// New color choice: refresh panel
 					swcColor.setAWTColor(c);

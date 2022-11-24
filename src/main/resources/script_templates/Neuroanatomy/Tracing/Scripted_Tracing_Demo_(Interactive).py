@@ -6,7 +6,7 @@
 """
 file:       Scripted_Tracing_Demo.py
 author:     Tiago Ferreira
-version:    20200524
+version:    20220924
 info:       Exemplifies how to programmatically interact with a running
             instance of SNT to perform auto-tracing tasks.
 """
@@ -23,20 +23,21 @@ def run():
     # running this script headless, the GUI won't be displayed, so
     # throughout the script we'll check frequently if the UI is present
     if not snt.getUI():
-        snt.initialize("demo", True)  # Image file path/identifier, display GUI?
+        imp = snt.demoImage("OP1")
+        snt.initialize(imp, True)  # args: image (file path allowed), display GUI?
     elif not snt.getUI().isReady():
         ui.showDialog("Demo cannot run in current state: UI not ready", "Error")
         return
 
     # For basic functionality we can call SNTService directly: E.g.:
-    # https://morphonets.github.io/SNT/sc/fiji/snt/SNTService.html
+    # https://javadoc.scijava.org/SNT/sc/fiji/snt/SNTService.html
     print("There are currently %s traced paths" % snt.getPaths().size())
     print("...of which %s are selected" % snt.getSelectedPaths().size())
     
     # But for more advanced features, we need to access SNT and
     # PathAndFillManager (the latter manages all things related to Paths):
-    # https://morphonets.github.io/SNT/index.html?sc/fiji/snt/SNT.html
-    # https://morphonets.github.io/SNT/index.html?sc/fiji/snt/PathAndFillManager.html
+    # https://javadoc.scijava.org/SNT/index.html?sc/fiji/snt/SNT.html
+    # https://javadoc.scijava.org/SNT/index.html?sc/fiji/snt/PathAndFillManager.html
     plugin = snt.getPlugin()
     pafm = snt.getPathAndFillManager()
     imp = plugin.getImagePlus()
@@ -47,13 +48,18 @@ def run():
     plugin.changeUIState(SNTUI.READY)
     astar_enabled = plugin.isAstarEnabled()
 
+    # We'll also toggle checkboxes in the "Filters for Visibility of Paths"
+    # widget to ensure paths created by this script remain visible
+    plugin.getUI().setVisibilityFilter("Only selected", False)
+
     # We need an image: if none exists, we'll create a placeholder display
-    # canvas. If that is not possible, we'll defaut to SNT's "demo" image
+    # canvas. If that is not possible, we'll default to SNT's "demo" image
     if imp is None and pafm.size() > 0:
         plugin.rebuildDisplayCanvases()
         imp = plugin.getImagePlus()
     if imp is None:
-        plugin.initialize(snt.demoImage('fractal'))
+        imp = snt.demoImage("OP1")
+        snt.initialize(imp, True)
         imp = plugin.getImagePlus()
 
     # Let's first announce (discretely) our scripting intentions
@@ -61,7 +67,6 @@ def run():
     if snt.getUI():
         plugin.getUI().showStatus(msg, True)
     plugin.setCanvasLabelAllPanes(msg)
-    snt.updateViewers()
 
     # In a real-world scenario we would have a routine in place to detect seed
     # points for auto-tracing. For this demo, let's just use the center pixel
@@ -85,7 +90,7 @@ def run():
     # the path will be a straight line between the two points). A point in the
     # tracing space (always in spatially calibrated units!) is defined through
     # a PointInImage object
-    # https://morphonets.github.io/SNT/index.html?sc/fiji/snt/util/PointInImage.html
+    # https://javadoc.scijava.org/SNT/index.html?sc/fiji/snt/util/PointInImage.html
     p = plugin.autoTrace(PointInImage(sx,sy,z), PointInImage(ex,ey,z), None)
     tree.add(p)
 
@@ -105,8 +110,8 @@ def run():
     # generate a mask ("fill it" in SNT's lingo). For simplicity, let's just
     # get some measurements out of the paths computed so far. The class to
     # script is TreeAnalyzer, or its subclass TreeStatistics
-    # https://morphonets.github.io/SNT/index.html?sc/fiji/snt/analysis/TreeAnalyzer.html
-    # https://morphonets.github.io/SNT/index.html?sc/fiji/snt/analysis/TreeStatistics.html
+    # https://javadoc.scijava.org/SNT/index.html?sc/fiji/snt/analysis/TreeAnalyzer.html
+    # https://javadoc.scijava.org/SNT/index.html?sc/fiji/snt/analysis/TreeStatistics.html
     tree_stats = TreeStatistics(tree)
     tree_stats.setContext(context)
     s_stats = tree_stats.getSummaryStats("length")
@@ -120,7 +125,7 @@ def run():
 
     # Remaining analysis classes can be access using the same scripting
     # pattern. E.g., for a 2D view of paths colored by rotation angle:
-    # https://morphonets.github.io/SNT/index.html?sc/fiji/snt/viewer/Viewer2D.html
+    # https://javadoc.scijava.org/SNT/index.html?sc/fiji/snt/viewer/Viewer2D.html
     viewer = Viewer2D(context)
     viewer.add(tree, "y coordinates", "Ice.lut")
     viewer.addColorBarLegend()

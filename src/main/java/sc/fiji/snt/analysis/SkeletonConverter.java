@@ -2,7 +2,7 @@
  * #%L
  * Fiji distribution of ImageJ for the life sciences.
  * %%
- * Copyright (C) 2010 - 2021 Fiji developers.
+ * Copyright (C) 2010 - 2022 Fiji developers.
  * %%
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as
@@ -24,14 +24,19 @@ package sc.fiji.snt.analysis;
 
 import ij.IJ;
 import ij.ImagePlus;
+import ij.gui.Roi;
 import ij.measure.Calibration;
+
 import org.jgrapht.Graphs;
 import org.jgrapht.alg.connectivity.BiconnectivityInspector;
 import sc.fiji.analyzeSkeleton.*;
 import sc.fiji.skeletonize3D.Skeletonize3D_;
+import sc.fiji.snt.SNTUtils;
 import sc.fiji.snt.Tree;
 import sc.fiji.snt.analysis.graph.DirectedWeightedGraph;
 import sc.fiji.snt.analysis.graph.SWCWeightedEdge;
+import sc.fiji.snt.util.ImpUtils;
+import sc.fiji.snt.util.PointInImage;
 import sc.fiji.snt.util.SWCPoint;
 import sc.fiji.snt.viewer.Viewer3D;
 import smile.neighbor.KDTree;
@@ -48,6 +53,11 @@ import java.util.*;
  * @see AnalyzeSkeleton_
  */
 public class SkeletonConverter {
+
+	/* scripting convenience: Keep references to AnalyzeSkeleton_ common fields */
+    public static final int LOWEST_INTENSITY_BRANCH = AnalyzeSkeleton_.LOWEST_INTENSITY_BRANCH;
+    public static final int LOWEST_INTENSITY_VOXEL = AnalyzeSkeleton_.LOWEST_INTENSITY_VOXEL;
+    public static final int SHORTEST_BRANCH = AnalyzeSkeleton_.SHORTEST_BRANCH;
 
     // AnalyzeSkeleton parameters
     private final ImagePlus imp;
@@ -95,23 +105,71 @@ public class SkeletonConverter {
         if (skeletonize) {
             if (!imagePlus.getProcessor().isBinary())
                 throw new IllegalArgumentException("Only binary images allowed");
-            skeletonize(imagePlus);
+            skeletonize(imagePlus, imagePlus.getNSlices() == 1);
         }
     }
 
-    /**
-     * Convenience method to skeletonize an 8-bit image using
-     * {@link Skeletonize3D_}.
-     *
-     * @param imp The 8-bit image to be skeletonized. All non-zero values are
-     *            considered to be foreground.
-     */
-    public static void skeletonize(final ImagePlus imp) {
-        final Skeletonize3D_ thin = new Skeletonize3D_();
-        thin.setup("", imp);
-        thin.run(null);
-        imp.updateImage();
-    }
+	/**
+	 * Convenience method to skeletonize an 8-bit image using
+	 * {@link Skeletonize3D_}.
+	 *
+	 * @param imp                 The 8-bit image to be skeletonized. All non-zero
+	 *                            values are considered to be foreground.
+	 * @param lowerThreshold      intensities below this value will be set to zero,
+	 *                            and will not contribute to the skeleton. Ignored
+	 *                            if < 0
+	 * @param uperThreshold       intensities above this value will be set to zero,
+	 *                            and will not contribute to the skeleton. Ignored
+	 *                            if < 0
+	 * @param erodeIsolatedPixels If true, any isolated pixels (single point
+	 *                            skeletons) that may be formed after
+	 *                            skeletonization are eliminated by erosion.
+	 */
+	public static void skeletonize(final ImagePlus imp, final double lowerThreshold, final double upperThreshold,
+			final boolean erodeIsolatedPixels) {
+		if (lowerThreshold != ij.process.ImageProcessor.NO_THRESHOLD && lowerThreshold > 0 && upperThreshold > 0) {
+			// TODO: Adopt IJ ops!?
+			ij.IJ.setRawThreshold(imp, lowerThreshold, upperThreshold, "no update");
+			SNTUtils.log("Lower threshold = " + lowerThreshold + ", Upper threshold = " + upperThreshold);
+			final int nImagesBefore = ij.WindowManager.getImageCount();
+			IJ.run(imp, "Convert to Mask", " black");
+			// HACK: By some strange reason (sometimes!?) a new mask is created even though we are skipping the
+			// flag to create a new stack in the options string. So for now, we'll just try to intercept it
+			final int nImagesAfter = ij.WindowManager.getImageCount();
+			if (nImagesAfter == nImagesBefore + 1) {
+				final ImagePlus maskImg = ij.WindowManager.getCurrentImage();
+				if (maskImg.getTitle().startsWith("MASK_") ) {
+					imp.setImage(maskImg);
+					maskImg.close();
+				}
+			}
+		} else {
+			SNTUtils.convertTo8bit(imp); // does nothing if imp already 8-bit
+		}
+		SNTUtils.log("Skeletonizing...");
+		final Skeletonize3D_ thin = new Skeletonize3D_();
+		thin.setup("", imp);
+		thin.run(null);
+		if (erodeIsolatedPixels)
+			ImpUtils.removeIsolatedPixels(imp);
+		imp.updateImage();
+	}
+
+	/**
+	 * Convenience method to skeletonize an 8-bit image using
+	 * {@link Skeletonize3D_}.
+	 *
+	 * @param imp                 The 8-bit image to be skeletonized. If the image
+	 *                            is thresholded, only thresholded values are
+	 *                            considered, otherwise all non-zero values are
+	 *                            considered to be foreground.
+	 * @param erodeIsolatedPixels If true, any isolated pixels (single point
+	 *                            skeletons) that may be formed after
+	 *                            skeletonization are eliminated by erosion.
+	 */
+	public static void skeletonize(final ImagePlus imp, final boolean erodeIsolatedPixels) {
+		skeletonize(imp, imp.getProcessor().getMinThreshold(), imp.getProcessor().getMaxThreshold(), erodeIsolatedPixels);
+	}
 
     /**
      * Generates a list of {@link Tree}s from the skeleton image.
@@ -131,8 +189,32 @@ public class SkeletonConverter {
     }
 
     /**
+     * Generates a list of {@link Tree}s from the skeleton image.
+     * Each Tree corresponds to one connected component of the graph returned by {@link SkeletonResult#getGraph()}.
+     *
+     * @param roi                the ROI enclosing the end-/junction-point(s) to be
+     *                           set as root(s) of the final graphs.
+     * @param restrictToROIplane if true and the image is 3D, ROI enclosure is
+     *                           restricted to the ROI plane
+     *                           ({@link Roi#getZPosition()}), or the active Z-slice
+     *                           if ROI is not associated with a particular slice
+     * @return the skeleton tree list
+     */
+    public List<Tree> getTrees(final Roi roi, final boolean restrictToROIplane) {
+        final List<Tree> treeList = new ArrayList<>();
+        for (final DirectedWeightedGraph graph : getGraphs(roi, restrictToROIplane)) {
+            final Tree tree = graph.getTree();
+            /* Assign image calibration to tree. Avoids unexpected offsets when initializing SNT */
+            tree.assignImage(imp);
+            treeList.add(tree);
+        }
+        return treeList;
+    }
+
+    /**
      * Generates a list of {@link DirectedWeightedGraph}s from the skeleton image.
      * Each graph corresponds to one connected component of the graph returned by {@link SkeletonResult#getGraph()}.
+     * @return 
      *
      * @return the skeleton graph list
      */
@@ -156,8 +238,81 @@ public class SkeletonConverter {
     }
 
     /**
+     * Generates a list of {@link DirectedWeightedGraph}s from the skeleton image.
+     * Each graph corresponds to one connected component of the graph returned by
+     * {@link SkeletonResult#getGraph()}.
+     *
+     * @param roi                the ROI enclosing the end-/junction-point(s) to be
+     *                           set as root(s) of the final graphs.
+     * @param restrictToROIplane if true and the image is 3D, ROI enclosure is
+     *                           restricted to the ROI plane
+     *                           ({@link Roi#getZPosition()}), or the active Z-slice
+     *                           if ROI is not associated with a particular slice
+     * @return the skeleton graph list
+     */
+    public List<DirectedWeightedGraph> getGraphs(final Roi roi, final boolean restrictToROIplane) {
+
+        int roiSlice = -1;
+        if (restrictToROIplane && imp.getNSlices() > 1) {
+            roiSlice = roi.getZPosition();
+            if (roiSlice == 0) {
+                // ROI is not associated with any slice, let's assume user meant active z-pos
+                roiSlice = imp.getZ();
+            }
+            // make ROI slice a 0-based index as per SkeletonResult point coordinates
+            roiSlice--;
+        }
+        final SkeletonResult sr = getSkeletonResult();
+        final List<PointInImage> putativeRoots = new ArrayList<>();
+        for (final Point p : sr.getListOfEndPoints()) {
+            // If the ROI is enclosing an end-point, use it as root
+            if (roiSlice > -1 && p.z != roiSlice)
+                continue;
+            if (roi.containsPoint(p.x, p.y))
+                putativeRoots.add(new PointInImage(p.x * pixelWidth, p.y * pixelHeight, p.z * pixelDepth));
+        }
+        if (putativeRoots.isEmpty()) {
+            // then maybe the ROI is enclosing a junction-point
+            for (final Point p : sr.getListOfJunctionVoxels()) {
+                if (roiSlice > -1 && p.z != roiSlice)
+                    continue;
+                if (roi.containsPoint(p.x, p.y))
+                    putativeRoots.add(new PointInImage(p.x * pixelWidth, p.y * pixelHeight, p.z * pixelDepth));
+            }
+        }
+        final List<DirectedWeightedGraph> graphList = getGraphs();
+        if (putativeRoots.isEmpty()) {
+            return graphList;
+        }
+		if (putativeRoots.size() > graphList.size()) {
+			SNTUtils.log("# of end-points and/or junction points enclosed by the ROI >  # of structures in image");
+		}
+        for (final DirectedWeightedGraph graph : graphList) {
+            // We now have a list of putative roots and a series of graphs.
+            // Let's try to assign them
+            for (final PointInImage putativeRoot : putativeRoots) {
+                final SWCPoint root = getMatchingLocationInGraph(putativeRoot, graph);
+                if (root != null)
+                    graph.setRoot(root);
+            }
+        }
+        return graphList;
+    }
+
+    private SWCPoint getMatchingLocationInGraph(final PointInImage point, final DirectedWeightedGraph graph) {
+        if (point != null) {
+            for (final SWCPoint p : graph.vertexSet()) {
+                if (p.isSameLocation(new PointInImage(point.x, point.y, point.z))) {
+                    return p;
+                }
+            }
+        }
+        return null;
+    }
+
+    /**
      * Sets the original {@link ImagePlus} to be used during voxel-based loop pruning.
-     * See <a href="https://imagej.net/AnalyzeSkeleton.html#Loop_detection_and_pruning">AnalyzeSkeleton documentation</a>
+     * See <a href="https://imagej.net/plugins/analyze-skeleton/?amp=1#loop-detection-and-pruning">AnalyzeSkeleton documentation</a>
      *
      * @param origIP the original ImagePlus
      * @see AnalyzeSkeleton_#run(int, boolean, boolean, ImagePlus, boolean, boolean)
@@ -167,8 +322,17 @@ public class SkeletonConverter {
     }
 
     /**
+     * Gets the loop pruning strategy.
+     *
+     * @see #setPruneMode(int)
+     */
+    public int getPruneMode() {
+        return pruneMode;
+    }
+
+    /**
      * Sets the loop pruning strategy.
-     * See <a href="https://imagej.net/AnalyzeSkeleton.html#Loop_detection_and_pruning">AnalyzeSkeleton documentation</a>
+     * See <a href="https://imagej.net/plugins/analyze-skeleton/?amp=1#loop-detection-and-pruning">AnalyzeSkeleton documentation</a>
      *
      * @param pruneMode the loop prune strategy, e.g., {@link AnalyzeSkeleton_#SHORTEST_BRANCH},
      *                  {@link AnalyzeSkeleton_#LOWEST_INTENSITY_BRANCH} or {@link AnalyzeSkeleton_#LOWEST_INTENSITY_VOXEL}
@@ -261,13 +425,18 @@ public class SkeletonConverter {
      * Runs AnalyzeSkeleton on the image and gets the Graph Array returned by {@link SkeletonResult#getGraph()}
      */
     private Graph[] getSkeletonGraphs() {
-        final AnalyzeSkeleton_ skeleton = new AnalyzeSkeleton_();
-        skeleton.setup("", imp);
-        SkeletonResult skeletonResult;
-        skeletonResult = skeleton.run(pruneMode, pruneEnds, shortestPath, origIP, silent, verbose);
-        return skeletonResult.getGraph();
+        return getSkeletonResult().getGraph();
     }
 
+    /**
+     * Runs AnalyzeSkeleton on the image and gets its {@link SkeletonResult}
+     */
+    private SkeletonResult getSkeletonResult() {
+        final AnalyzeSkeleton_ skeleton = new AnalyzeSkeleton_();
+        skeleton.setup("", imp);
+        return skeleton.run(pruneMode, pruneEnds, shortestPath, origIP, silent, verbose);
+    }
+   
     /**
      * Convert the AnalyzeSkeleton {@link Graph} object to an SNT {@link Tree}, using a {@link DirectedWeightedGraph}
      * as an intermediary data structure.

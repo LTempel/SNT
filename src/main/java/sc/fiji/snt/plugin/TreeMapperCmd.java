@@ -2,7 +2,7 @@
  * #%L
  * Fiji distribution of ImageJ for the life sciences.
  * %%
- * Copyright (C) 2010 - 2021 Fiji developers.
+ * Copyright (C) 2010 - 2022 Fiji developers.
  * %%
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as
@@ -44,6 +44,7 @@ import org.scijava.widget.Button;
 
 import sc.fiji.snt.analysis.PathProfiler;
 import sc.fiji.snt.analysis.TreeColorMapper;
+import sc.fiji.snt.gui.GuiUtils;
 import sc.fiji.snt.gui.cmds.CommonDynamicCmd;
 import sc.fiji.snt.viewer.Viewer2D;
 import sc.fiji.snt.viewer.Viewer3D;
@@ -125,6 +126,17 @@ public class TreeMapperCmd extends CommonDynamicCmd {
 			return;
 		}
 		final double[] minMax = colorizer.getMinMax();
+		if (showInRecViewer) {
+			final Viewer3D recViewer = sntService.getRecViewer();
+			recViewer.addColorBarLegend(colorTable, (float) minMax[0], (float) minMax[1]);
+		}
+		sntService.updateViewers();
+		if (showPlot && colorizer.isNodeMapping() && tree.getNodesCount() > 10000) {
+			showPlot = new GuiUtils().getConfirmation("Render more than 10k nodes uniquely in Reconstruction Plotter "
+					+ "could become a CPU-intensive operation. Alternatively, you may want to render mapped nodes in "
+					+ "Reconstruction Viewer (significantly faster), or downsample the structure before the mapping. "
+					+ "Proceed nevertheless?", "Confirm Slow Operation?");
+		}
 		if (showPlot) {
 			SNTUtils.log("Creating 2D plot...");
 			plot = new Viewer2D(context());
@@ -132,11 +144,6 @@ public class TreeMapperCmd extends CommonDynamicCmd {
 			plot.addColorBarLegend(colorTable, minMax[0], minMax[1]);
 			plot.show();
 		}
-		if (showInRecViewer) {
-			final Viewer3D recViewer = sntService.getRecViewer();
-			recViewer.addColorBarLegend(colorTable, (float) minMax[0], (float) minMax[1]);
-		}
-		sntService.updateViewers();
 		SNTUtils.log("Finished...");
 		resetUI();
 	}

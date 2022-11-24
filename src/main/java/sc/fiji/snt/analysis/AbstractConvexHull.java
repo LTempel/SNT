@@ -2,7 +2,7 @@
  * #%L
  * Fiji distribution of ImageJ for the life sciences.
  * %%
- * Copyright (C) 2010 - 2021 Fiji developers.
+ * Copyright (C) 2010 - 2022 Fiji developers.
  * %%
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as
@@ -22,11 +22,12 @@
 
 package sc.fiji.snt.analysis;
 
-import net.imagej.ops.OpMatchingService;
 import net.imagej.ops.OpService;
 import org.scijava.Context;
 import org.scijava.NoSuchServiceException;
 import org.scijava.plugin.Parameter;
+
+import sc.fiji.snt.SNTUtils;
 import sc.fiji.snt.util.SNTPoint;
 
 import java.util.Collection;
@@ -49,17 +50,19 @@ public abstract class AbstractConvexHull {
         this.points = points;
     }
 
-    protected <T extends SNTPoint> AbstractConvexHull(final Collection<T> points) {
-        try (Context context = new Context(OpService.class, OpMatchingService.class)) {
-            opService = context.getService(OpService.class);
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-        if (opService == null) {
-            throw new NoSuchServiceException("Failed to initialize OpService");
-        }
-        this.points = points;
-    }
+	protected <T extends SNTPoint> AbstractConvexHull(final Collection<T> points) {
+		if (opService == null) {
+			try {
+				SNTUtils.getContext().inject(this);
+			} catch (final Exception e) {
+				e.printStackTrace();
+			}
+		}
+		if (opService == null) {
+			throw new NoSuchServiceException("Failed to initialize OpService");
+		}
+		this.points = points;
+	}
 
     public abstract void compute();
 

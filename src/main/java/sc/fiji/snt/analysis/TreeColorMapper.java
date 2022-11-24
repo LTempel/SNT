@@ -2,7 +2,7 @@
  * #%L
  * Fiji distribution of ImageJ for the life sciences.
  * %%
- * Copyright (C) 2010 - 2021 Fiji developers.
+ * Copyright (C) 2010 - 2022 Fiji developers.
  * %%
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as
@@ -84,9 +84,9 @@ public class TreeColorMapper extends ColorMapper {
 	/** Flag for {@value #N_SPINES} statistics. */
 	public static final String N_SPINES =  TreeStatistics.N_SPINES;
 	/** Flag for {@value #MEAN_RADIUS} mapping. */
-	public static final String MEAN_RADIUS = TreeStatistics.MEAN_RADIUS;
+	public static final String MEAN_RADIUS = TreeStatistics.PATH_MEAN_RADIUS;
 	/** Flag for {@value #AVG_SPINE_DENSITY} mapping. */
-	public static final String AVG_SPINE_DENSITY = TreeStatistics.AVG_SPINE_DENSITY;
+	public static final String AVG_SPINE_DENSITY = TreeStatistics.PATH_SPINE_DENSITY;
 	/** Flag for {@value #NODE_RADIUS} mapping. */
 	public static final String NODE_RADIUS = TreeStatistics.NODE_RADIUS;
 	/** Flag for {@value #X_COORDINATES} mapping. */
@@ -131,6 +131,7 @@ public class TreeColorMapper extends ColorMapper {
 	private Map<String, URL> luts;
 	private int internalCounter = 1;
 	private final List<Tree> mappedTrees;
+	private boolean nodeMapping;
 
 	/**
 	 * Instantiates the mapper.
@@ -330,6 +331,7 @@ public class TreeColorMapper extends ColorMapper {
 		for (final MappedPath mp : mappedPaths) {
 			mp.path.setColor(getColor(mp.mappedValue));
 		}
+		nodeMapping = false;
 	}
 
 	private void mapToNodeProperty(final String measurement,
@@ -367,6 +369,7 @@ public class TreeColorMapper extends ColorMapper {
 			}
 			p.setNodeColors(colors);
 		}
+		nodeMapping = true;
 	}
 
 	private void mapPathDistances(final PointInImage root) {
@@ -433,7 +436,7 @@ public class TreeColorMapper extends ColorMapper {
 		// Wipe node values so that computed distances don't
 		// get mistakenly interpreted as pixel intensities
 		paths.forEach(p -> p.setNodeValues(null));
-
+		nodeMapping = true;
 	}
 
 	/**
@@ -475,6 +478,7 @@ public class TreeColorMapper extends ColorMapper {
 			}
 		}
 		mappedTrees.add(tree);
+		nodeMapping = true;
 	}
 
 	/**
@@ -670,6 +674,10 @@ public class TreeColorMapper extends ColorMapper {
 		if (colorTable != null && !mappedTrees.isEmpty())
 			multiViewer.setColorBarLegend(colorTable, min, max);
 		return multiViewer;
+	}
+
+	public boolean isNodeMapping() {
+		return nodeMapping;
 	}
 
 	private class MappedPath {

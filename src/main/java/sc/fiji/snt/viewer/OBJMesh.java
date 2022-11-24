@@ -2,7 +2,7 @@
  * #%L
  * Fiji distribution of ImageJ for the life sciences.
  * %%
- * Copyright (C) 2010 - 2021 Fiji developers.
+ * Copyright (C) 2010 - 2022 Fiji developers.
  * %%
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as
@@ -188,7 +188,7 @@ public class OBJMesh {
 	public void setTransparency(final double transparencyPercent) {
 		final Color existing = drawable.getColor();
 		final Color adjusted = new Color(existing.r, existing.g, existing.b,
-				(int) Math.round((100 - transparencyPercent) * 255 / 100));
+				(float) (1 - (transparencyPercent / 100.0)));
 		drawable.setColor(adjusted);
 	}
 

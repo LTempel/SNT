@@ -2,7 +2,7 @@
  * #%L
  * Fiji distribution of ImageJ for the life sciences.
  * %%
- * Copyright (C) 2010 - 2021 Fiji developers.
+ * Copyright (C) 2010 - 2022 Fiji developers.
  * %%
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as
@@ -28,6 +28,7 @@ import ij.gui.Roi;
 import ij.gui.Toolbar;
 import ij.measure.Calibration;
 
+import org.apache.commons.lang3.StringUtils;
 import org.jgrapht.Graphs;
 import org.jgrapht.traverse.DepthFirstIterator;
 import org.scijava.util.PlatformUtils;
@@ -201,13 +202,13 @@ class InteractiveTracerCanvas extends TracerCanvas {
 	private void showPopupMenu(final int x, final int y) {
 		final Path activePath = tracerPlugin.getSingleSelectedPath();
 		final boolean be = uiReadyForModeChange(SNTUI.EDITING);
-		extendPathMenuItem.setText((activePath != null) ? "Continue Extending " + activePath
-				.getName() : AListener.EXTEND_SELECTED);
+		extendPathMenuItem.setText(
+				(activePath != null) ? "Continue Extending " + getShortName(activePath) : AListener.EXTEND_SELECTED);
 		extendPathMenuItem.setEnabled(!(editMode || tracerPlugin.tracingHalted));
 		toggleEditModeMenuItem.setEnabled(be);
 		toggleEditModeMenuItem.setState(be && editMode);
-		toggleEditModeMenuItem.setText(
-				String.format(AListener.EDIT_TOGGLE_FORMATTER, (activePath == null) ? " Mode" : activePath.getName()));
+		toggleEditModeMenuItem.setText(String.format(AListener.EDIT_TOGGLE_FORMATTER,
+				(activePath == null) ? " Mode" : getShortName(activePath)));
 		final boolean bp = uiReadyForModeChange(SNTUI.SNT_PAUSED);
 		togglePauseSNTMenuItem.setEnabled(bp);
 		togglePauseSNTMenuItem.setSelected(bp && tracerPlugin
@@ -279,7 +280,8 @@ class InteractiveTracerCanvas extends TracerCanvas {
 			return;
 		}
 		connectToSecondaryEditingPath.setEnabled(true);
-		final String label = tracerPlugin.getPreviousEditingPath().getName() + " (node " + tracerPlugin.getPreviousEditingPath().getEditableNodeIndex() +")";
+		final String label = getShortName(tracerPlugin.getPreviousEditingPath()) + " (node "
+				+ tracerPlugin.getPreviousEditingPath().getEditableNodeIndex() + ")";
 		connectToSecondaryEditingPath.setText(AListener.NODE_CONNECT_TO_PREV_EDITING_PATH_PREFIX + label);
 	}
 
@@ -305,7 +307,8 @@ class InteractiveTracerCanvas extends TracerCanvas {
 		// Set the correct edge directions in the merged graph
 		destinationGraph.setRoot(getMatchingPointInGraph(destinationRoot, destinationGraph));
 		final Tree newTree = destinationGraph.getTreeWithSamePathStructure();
-		enableEditMode(false);
+//		enableEditMode(false);
+		tracerPlugin.setEditingPath(null);
 		final Calibration cal = tracerPlugin.getImagePlus().getCalibration(); // snt the instance of the plugin
 		newTree.list().forEach(p -> p.setSpacing(cal));
 		final boolean existingEnableUiUpdates = pathAndFillManager.enableUIupdates;
@@ -315,6 +318,10 @@ class InteractiveTracerCanvas extends TracerCanvas {
 		newTree.list().forEach(p -> pathAndFillManager.addPath(p, false, true));
 		SNTUtils.log("Finished merge in " + (System.currentTimeMillis() - start) + "ms");
 		pathAndFillManager.enableUIupdates = existingEnableUiUpdates;
+	}
+
+	private static String getShortName(final Path p) {
+		return StringUtils.abbreviate(p.getName(), 30);
 	}
 
 	private JMenuItem helpOnConnectingMenuItem() {
@@ -450,7 +457,7 @@ class InteractiveTracerCanvas extends TracerCanvas {
 		}
 		else {
 			tracerPlugin.selectPath(nearPoint.getPath(), addToExistingSelection);
-			getGuiUtils().tempMsg(nearPoint.getPath().getName() + " selected");
+			getGuiUtils().tempMsg(getShortName(nearPoint.getPath())+ " selected");
 		}
 	}
 
@@ -462,21 +469,30 @@ class InteractiveTracerCanvas extends TracerCanvas {
 			return;
 		}
 
-		List<PointInCanvas> nodes = new ArrayList<>();
-		for (final Path path : pathAndFillManager.getPaths()) {
+		final List<PointInCanvas> nodes = new ArrayList<>();
+		if (pathAndFillManager.size() == 1) {
+			// There is only one path, presumably from a just-finished tracing operation.
+			// NB: Selection status of such path depends on the "Finishing a path selects
+			// it" checkbox in the GUI. We'll force select it.
+			tracerPlugin.selectPath(pathAndFillManager.getPath(0), addToExistingSelection);
+			getGuiUtils().tempMsg(pathAndFillManager.getPath(0) + " selected");
+			return;
+		} else for (final Path path : pathAndFillManager.getPaths()) {
 			if (!path.isSelected()) {
 				nodes.addAll(path.getUnscaledNodesInViewPort(this));
 			}
-		}		
+		}
 		if (nodes.isEmpty()) {
-			getGuiUtils().tempMsg("Nothing to select. No paths in view");
+			if (pathAndFillManager.getSelectedPaths().isEmpty())
+				getGuiUtils().tempMsg("Nothing to select. No paths in view");
+			// else the closest path to the pointer is an already pre-selected path in view
 			return;
 		}
 
 		final double[] p = new double[3];
 		tracerPlugin.findPointInStackPrecise(last_x_in_pane_precise,
 			last_y_in_pane_precise, plane, p);
-		PointInCanvas cursor = new PointInCanvas(p[0], p[1], 0);
+		final PointInCanvas cursor = new PointInCanvas(p[0], p[1], 0);
 
 		final NearPointInCanvas nearPoint = NearPointInCanvas.nearestPointInCanvas(nodes, cursor);
 		if (nearPoint == null) {
@@ -484,7 +500,7 @@ class InteractiveTracerCanvas extends TracerCanvas {
 		}
 		else {
 			tracerPlugin.selectPath(nearPoint.getPath(), addToExistingSelection);
-			getGuiUtils().tempMsg(nearPoint.getPath().getName() + " selected");
+			getGuiUtils().tempMsg(getShortName(nearPoint.getPath()) + " selected");
 		}
 	}
 
@@ -715,7 +731,7 @@ class InteractiveTracerCanvas extends TracerCanvas {
 	protected void drawOverlay(final Graphics2D g) {
 		if (!tracerPlugin.getPathAndFillManager().enableUIupdates) return;
 
-		final boolean drawDiametersXY = tracerPlugin.getDrawDiametersXY();
+		final boolean drawDiametersXY = tracerPlugin.getDrawDiameters();
 		final int sliceZeroIndexed = imp.getZ() - 1;
 		int eitherSideParameter = eitherSide;
 		if (!just_near_slices) eitherSideParameter = -1;
@@ -748,7 +764,7 @@ class InteractiveTracerCanvas extends TracerCanvas {
 						tracerPlugin.last_start_point_y * tracerPlugin.y_spacing,
 						tracerPlugin.last_start_point_z * tracerPlugin.z_spacing);
 				p.onPath = currentPath;
-				final PathNode pn = new PathNode(p, this);
+				final PathNode pn = new PathNode(p, 0, this);
 				pn.setSize(spotDiameter);
 				pn.draw(g, getUnconfirmedPathColor());
 			}
@@ -792,6 +808,10 @@ class InteractiveTracerCanvas extends TracerCanvas {
 		if (fillColor == null) fillColor = new Color(0, 128, 0);
 		if (fillTransparent) fillColor = SNTColor.alphaColor(fillColor, 50);
 		return fillColor;
+	}
+
+	public JPopupMenu getComponentPopupMenu() {
+		return pMenu;
 	}
 
 	protected void toggleEditMode() {
@@ -1038,7 +1058,8 @@ class InteractiveTracerCanvas extends TracerCanvas {
 			tracerPlugin.getPathAndFillManager().deletePath(editingPath);
 			if (rebuild) tracerPlugin.getPathAndFillManager().rebuildRelationships();
 			//tracerPlugin.detectEditingPath();
-			enableEditMode(false);
+//			enableEditMode(false);
+			tracerPlugin.setEditingPath(null);
 			tracerPlugin.updateAllViewers();
 		}
 	}
@@ -1132,7 +1153,8 @@ class InteractiveTracerCanvas extends TracerCanvas {
 		final DirectedWeightedGraph editingGraph = new DirectedWeightedGraph(editingTree, false);
 		editingGraph.setRoot(getMatchingPointInGraph(editingNode, editingGraph));
 		final Tree newTree = editingGraph.getTreeWithSamePathStructure();
-		enableEditMode(false);
+//		enableEditMode(false);
+		tracerPlugin.setEditingPath(null);
 		final Calibration cal = tracerPlugin.getImagePlus().getCalibration(); // snt the instance of the plugin
 		newTree.list().forEach(p -> p.setSpacing(cal));
 		final boolean existingEnableUiUpdates = pathAndFillManager.enableUIupdates;
@@ -1170,7 +1192,8 @@ class InteractiveTracerCanvas extends TracerCanvas {
 		editingGraph.removeAllVertices(descendantVertexSet);
 		final Tree ancestorTree = editingGraph.getTreeWithSamePathStructure();
 		final Tree descendentTree = descendantGraph.getTreeWithSamePathStructure();
-		enableEditMode(false);
+//		enableEditMode(false);
+		tracerPlugin.setEditingPath(null);
 		final Calibration cal = tracerPlugin.getImagePlus().getCalibration(); // snt the instance of the plugin
 		ancestorTree.list().forEach(p -> p.setSpacing(cal));
 		descendentTree.list().forEach(p -> p.setSpacing(cal));

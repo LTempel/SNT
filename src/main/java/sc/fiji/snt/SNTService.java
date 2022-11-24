@@ -2,7 +2,7 @@
  * #%L
  * Fiji distribution of ImageJ for the life sciences.
  * %%
- * Copyright (C) 2010 - 2021 Fiji developers.
+ * Copyright (C) 2010 - 2022 Fiji developers.
  * %%
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as
@@ -206,8 +206,15 @@ public class SNTService extends AbstractService implements ImageJService {
 	 * @throws UnsupportedOperationException if SNT is not running
 	 * @throws IOException                   if data cannot be imported
 	 */
-	public void loadTracings(final String filePathOrURL) throws UnsupportedOperationException, IOException {
+	public void loadTracings(String filePathOrURL) throws UnsupportedOperationException, IOException {
 		accessActiveInstance(false);
+		final String lowerCaseFilePathOrURL = filePathOrURL.toLowerCase();
+		if (lowerCaseFilePathOrURL.contains("demo")) {
+			if (lowerCaseFilePathOrURL.contains("op"))
+				filePathOrURL = "https://raw.githubusercontent.com/morphonets/SNT/0b3451b8e62464a270c9aab372b4f651c4cf9af7/src/test/resources/OP_1-gs.swc";
+			else if (lowerCaseFilePathOrURL.contains("timelapse")) 
+				filePathOrURL = "https://raw.githubusercontent.com/morphonets/SNTmanuscript/9b4b933a742244505f0544c29211e596c85a5da7/Fig01/traces/701.traces";
+		}
 		if (filePathOrURL.startsWith("http") || filePathOrURL.indexOf("://") > 0) {
 			final String fileName = filePathOrURL.substring(filePathOrURL.lastIndexOf('/') + 1);
 			final String fileNameWithoutExtn = fileName.substring(0, fileName.lastIndexOf('.'));
@@ -543,7 +550,7 @@ public class SNTService extends AbstractService implements ImageJService {
 				}
 				tree.setLabel(treeLabel);
 				tree.getProperties().setProperty(Tree.KEY_SPATIAL_UNIT, "um");
-				tree.getProperties().setProperty(TreeProperties.KEY_SOURCE, "SNT Demo");
+				tree.getProperties().setProperty(Tree.KEY_SOURCE, "SNT Demo");
 			} else {
 				return null;
 			}
@@ -773,6 +780,7 @@ public class SNTService extends AbstractService implements ImageJService {
 			plugin.closeAndResetAllPanes();
 			if (plugin.getImagePlus() != null) plugin.getImagePlus().close();
 			SNTUtils.setPlugin(null);
+			SNTUtils.setContext(null);
 			plugin = null;
 			} catch (final NullPointerException ignored) {
 				// do nothing

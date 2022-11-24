@@ -1,12 +1,16 @@
 #@ String (label="Image", choices={"Current image", "Image from path specified below", "None. Use demo image"}, style="listBox") choice
 #@ File (label="Image file", required=false) impFile
 #@ boolean (label="Skeletonize image") skeletonizeImp
-#@ boolean (label="Prune trees by length") pruneByLength
-#@ Float (label="Length threshold", description="The minimum tree length necessary to avoid pruning") lengthThreshold
+#@ String(visibility="MESSAGE", value="<html><b>Disconnected Components:",persist=false) divider1
 #@ boolean (label="Connect components", description="Whether to connect individual components of the result") connectComponents
 #@ Float (label="Max connection distance", description="The maximum allowable distance between the closest pair of points for two components to be merged") maxConnectDist
+#@ boolean (label="Prune by length") pruneByLength
+#@ Float (label="Length threshold", description="The minimum tree length necessary to avoid pruning") lengthThreshold
+#@ String(visibility="MESSAGE", value="<html><b>Options:", persist=false) divider2
+#@ boolean (label="Set root from ROI") rootFromROI
+#@ boolean (label="Show result") showInViewer
 #@ boolean (label="Save result") saveResult
-#@ File (label="Output directory for reconstruction(s)", style="directory", required=false) outDir
+#@ File (label="Output directory", style="directory", required=false) outDir
 #@ Context context
 #@ SNTService snt
 
@@ -20,15 +24,8 @@ from sc.fiji.snt import Tree
 from sc.fiji.snt.analysis import SkeletonConverter, TreeAnalyzer
 from sc.fiji.snt.viewer import Viewer3D
 
-# Documentation Resources: https://imagej.net/SNT:_Scripting
-# Latest SNT API: https://morphonets.github.io/SNT/
-
-
-def get_sample_image():
-    IJ.run("ddaC Neuron (84k)", "")
-    imp = IJ.getImage()
-    IJ.run(imp, "Set Scale...", "distance=0 known=0 unit=pixel")
-    return imp
+# Documentation Resources: https://imagej.net/plugins/snt/scripting
+# Latest SNT API: https://javadoc.scijava.org/SNT/
 
 
 def main():
@@ -38,7 +35,7 @@ def main():
 	elif choice == "Image from path specified below":
 		imp = IJ.openImage(impFile.getAbsolutePath())
 	elif choice == "None. Use demo image":
-		imp = get_sample_image()
+		imp = snt.demoImage("ddaC")
 		skeletonizeImp = True
 	# Use the image to create the reconstructions, first skeletonizing 
 	# if it is not already a skeleton.
@@ -47,12 +44,18 @@ def main():
 	converter.setLengthThreshold(lengthThreshold)
 	converter.setConnectComponents(connectComponents)
 	converter.setMaxConnectDist(maxConnectDist)
-	trees = converter.getTrees()
-	# Display generated reconstructions
-	viewer = Viewer3D(context)
-	Tree.assignUniqueColors(trees)
-	viewer.add(trees)
-	viewer.show()
+	if rootFromROI and imp.getRoi() and imp.getRoi().isArea():
+		# root will be set by juntion/end point contained in ROI
+		trees = converter.getTrees(imp.getRoi(), False) # roi containing root location, do not restrict ROI to 2D
+	else:
+		# root will be the starting node of the skeleton
+		trees = converter.getTrees()
+	if showInViewer:
+		# Display generated reconstructions
+		viewer = Viewer3D(context)
+		Tree.assignUniqueColors(trees)
+		viewer.add(trees)
+		viewer.show()
 	if saveResult:
 		# Save each generated tree as an SWC file
 		impTitle = imp.getShortTitle() + "-skeleton"

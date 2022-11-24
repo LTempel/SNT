@@ -2,7 +2,7 @@
  * #%L
  * Fiji distribution of ImageJ for the life sciences.
  * %%
- * Copyright (C) 2010 - 2021 Fiji developers.
+ * Copyright (C) 2010 - 2022 Fiji developers.
  * %%
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as
@@ -196,7 +196,7 @@ public class LoadReconstructionCmd extends CommonDynamicCmd {
 	}
 
 	private void exit() {
-		notifyLoadingEnd(recViewer);
+		resetProgress(recViewer);
 		recViewer.setSplitDendritesFromAxons(splitState);
 	}
 
