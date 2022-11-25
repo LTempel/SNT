@@ -2,7 +2,7 @@
  * #%L
  * Fiji distribution of ImageJ for the life sciences.
  * %%
- * Copyright (C) 2010 - 2021 Fiji developers.
+ * Copyright (C) 2010 - 2022 Fiji developers.
  * %%
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as
@@ -29,8 +29,11 @@ import org.scijava.plugin.Parameter;
 import org.scijava.plugin.Plugin;
 import org.scijava.ui.UIService;
 
+import ij.ImagePlus;
+import ij.plugin.CompositeConverter;
 import sc.fiji.snt.SNTService;
 import sc.fiji.snt.SNTUI;
+import sc.fiji.snt.gui.GuiUtils;
 import sc.fiji.snt.viewer.Viewer3D;
 import sc.fiji.snt.SNT;
 import sc.fiji.snt.SNTPrefs;
@@ -111,12 +114,16 @@ public class CommonDynamicCmd extends DynamicCommand {
 
 	protected void notifyLoadingStart(final Viewer3D recViewer) {
 		if (ui != null) ui.changeState(SNTUI.LOADING);
+		startLoopProgress(recViewer);
+	}
+
+	protected void startLoopProgress(final Viewer3D recViewer) {
 		if (recViewer != null && recViewer.getManagerPanel() != null) {
-			recViewer.getManagerPanel().showProgress(-1, 0);
+			recViewer.getManagerPanel().showProgress(-1, -1);
 		}
 	}
 
-	protected void notifyLoadingEnd(final Viewer3D recViewer) {
+	protected void resetProgress(final Viewer3D recViewer) {
 		if (recViewer != null && recViewer.getManagerPanel() != null) {
 			recViewer.getManagerPanel().showProgress(0, 0);
 		}
@@ -127,12 +134,21 @@ public class CommonDynamicCmd extends DynamicCommand {
 	}
 
 	protected void resetUI(final boolean validateDimensions) {
+		resetUI(validateDimensions, SNTUI.READY);
+	}
+
+	protected void resetUI(final boolean validateDimensions, final int state) {
 		if (ui != null) {
-			ui.changeState(SNTUI.READY);
+			ui.changeState(state);
 			if (validateDimensions && !isCanceled())
 				ui.runCommand("validateImgDimensions");
 		}
 		statusService.clearStatus();
+	}
+
+	protected void resetUI(final Viewer3D recViewer) {
+		resetUI();
+		resetProgress(recViewer);
 	}
 
 	protected void notifyExternalDataLoaded() { //TODO: Implement listener
@@ -140,6 +156,18 @@ public class CommonDynamicCmd extends DynamicCommand {
 		snt.updateDisplayCanvases();
 		snt.updateAllViewers();
 		snt.getPrefs().setTemp(SNTPrefs.NO_IMAGE_ASSOCIATED_DATA, true);
+	}
+
+	protected ImagePlus comvertInPlaceToCompositeAsNeeded(ImagePlus imp) {
+		if (imp.getType() == ImagePlus.COLOR_RGB && new GuiUtils(ui).getConfirmation(
+				"RGB images are (intentionally) not supported. You can however convert " + imp.getTitle()
+						+ " to a multichannel image. Would you like to do it now? (Import will abort if you choose \"No\")",
+				"Convert to Multichannel?")) {
+			imp.hide();
+			imp = CompositeConverter.makeComposite(imp);
+			imp.show();
+		}
+		return imp;
 	}
 
 	@Override

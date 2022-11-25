@@ -2,7 +2,7 @@
  * #%L
  * Fiji distribution of ImageJ for the life sciences.
  * %%
- * Copyright (C) 2010 - 2021 Fiji developers.
+ * Copyright (C) 2010 - 2022 Fiji developers.
  * %%
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as
@@ -42,11 +42,11 @@ import org.scijava.util.ColorRGB;
 import org.scijava.util.Colors;
 
 import net.imagej.ImageJ;
-import net.imagej.plot.LineStyle;
-import net.imagej.plot.MarkerStyle;
-import net.imagej.plot.PlotService;
-import net.imagej.plot.XYPlot;
-import net.imagej.plot.XYSeries;
+import org.scijava.plot.LineStyle;
+import org.scijava.plot.MarkerStyle;
+import org.scijava.plot.PlotService;
+import org.scijava.plot.XYPlot;
+import org.scijava.plot.XYSeries;
 import sc.fiji.snt.Path;
 import sc.fiji.snt.SNTService;
 import sc.fiji.snt.Tree;
@@ -77,7 +77,7 @@ public class PathTimeAnalysisCmd extends CommonDynamicCmd {
 			TreeStatistics.PATH_LENGTH + " (mean ± SD)", //
 			MultiTreeStatistics.N_BRANCH_POINTS, //
 			MultiTreeStatistics.HIGHEST_PATH_ORDER, //
-			MultiTreeStatistics.MEAN_RADIUS + " (mean ± SD)", //
+			MultiTreeStatistics.PATH_MEAN_RADIUS + " (mean ± SD)", //
 			MultiTreeStatistics.N_PATHS, //
 	})
 	private String measurementChoice;
@@ -127,6 +127,11 @@ public class PathTimeAnalysisCmd extends CommonDynamicCmd {
 
 	private void runNonMatchedAnalysis() {
 		final Map<Integer, List<Path>> map = getPathListMap();
+		if (map.size() < 2) {
+			error("Selected Paths seem to be all asociated with the same time-point. "
+				+ "Make sure frame tags have been successfully applied.");
+			return;
+		}
 		final ArrayList<Double> xValues = new ArrayList<>(map.size());
 		final ArrayList<Double> yValues = new ArrayList<>(map.size());
 		final boolean includeSDevSeries = measurementChoice.contains(" (mean");
@@ -151,7 +156,7 @@ public class PathTimeAnalysisCmd extends CommonDynamicCmd {
 		if (outputChoice.toLowerCase().contains("plot")) {
 			final XYPlot plot = getPlot();
 			final XYSeries series = plot.addXYSeries();
-			series.setStyle(plot.newSeriesStyle(Colors.BLACK, LineStyle.SOLID, MarkerStyle.FILLEDCIRCLE));
+			series.setStyle(plotService.newSeriesStyle(Colors.BLACK, LineStyle.SOLID, MarkerStyle.FILLEDCIRCLE));
 			series.setValues(xValues, yValues);
 			if (includeSDevSeries) {
 				series.setLabel("Mean ± SD");
@@ -159,12 +164,12 @@ public class PathTimeAnalysisCmd extends CommonDynamicCmd {
 				final XYSeries upper = plot.addXYSeries();
 				upper.setLabel("Mean+SD");
 				upper.setLegendVisible(false);
-				upper.setStyle(plot.newSeriesStyle(Colors.DARKGRAY, LineStyle.DASH, MarkerStyle.NONE));
+				upper.setStyle(plotService.newSeriesStyle(Colors.DARKGRAY, LineStyle.DASH, MarkerStyle.NONE));
 				upper.setValues(xValues, upperStdDevValues);
 				final XYSeries lower = plot.addXYSeries();
 				lower.setLabel("Mean-SD");
 				lower.setLegendVisible(false);
-				lower.setStyle(plot.newSeriesStyle(Colors.DARKGRAY, LineStyle.DASH, MarkerStyle.NONE));
+				lower.setStyle(plotService.newSeriesStyle(Colors.DARKGRAY, LineStyle.DASH, MarkerStyle.NONE));
 				lower.setValues(xValues, lowerStdDevValues);
 			} else {
 				series.setLabel("Un-matched paths");
@@ -239,7 +244,7 @@ public class PathTimeAnalysisCmd extends CommonDynamicCmd {
 				series.setLabel(groupID.substring(1, groupID.length()-1)); // group ID without curly braces
 				series.setLegendVisible(true);
 				series.setStyle(
-						plot.newSeriesStyle(uniqueColors[colorCounter[0]++], LineStyle.SOLID, MarkerStyle.CIRCLE));
+						plotService.newSeriesStyle(uniqueColors[colorCounter[0]++], LineStyle.SOLID, MarkerStyle.CIRCLE));
 				final ArrayList<Double> xValues = new ArrayList<>(groupMap.size());
 				final ArrayList<Double> yValues = new ArrayList<>(groupMap.size());
 				groupMap.forEach((frame, path) -> {
@@ -325,8 +330,8 @@ public class PathTimeAnalysisCmd extends CommonDynamicCmd {
 
 	/* IDE debug method **/
 	public static void main(final String[] args) {
-		GuiUtils.setLookAndFeel();
 		final ImageJ ij = new ImageJ();
+		GuiUtils.setLookAndFeel();
 		ij.ui().showUI();
 		final SNTService sntService = ij.context().getService(SNTService.class);
 		final Tree tree = sntService.demoTrees().get(0);

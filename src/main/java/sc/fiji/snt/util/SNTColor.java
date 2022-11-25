@@ -2,7 +2,7 @@
  * #%L
  * Fiji distribution of ImageJ for the life sciences.
  * %%
- * Copyright (C) 2010 - 2021 Fiji developers.
+ * Copyright (C) 2010 - 2022 Fiji developers.
  * %%
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as
@@ -247,8 +247,8 @@ public class SNTColor {
 		return colors;
 	}
 
-	private static ColorRGB[] KELLY_COLORS = { // See
-																							// https://stackoverflow.com/a/4382138
+	private static ColorRGB[] KELLY_COLORS = {
+		// See https://stackoverflow.com/a/4382138
 		ColorRGB.fromHTMLColor("#FFB300"), // Vivid Yellow
 		ColorRGB.fromHTMLColor("#803E75"), // Strong Purple
 		ColorRGB.fromHTMLColor("#FF6800"), // Vivid Orange

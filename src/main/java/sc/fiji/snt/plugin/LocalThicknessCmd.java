@@ -2,7 +2,7 @@
  * #%L
  * Fiji distribution of ImageJ for the life sciences.
  * %%
- * Copyright (C) 2010 - 2021 Fiji developers.
+ * Copyright (C) 2010 - 2022 Fiji developers.
  * %%
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as
@@ -128,7 +128,7 @@ public class LocalThicknessCmd extends CommonDynamicCmd {
 
 	@SuppressWarnings("unused")
 	private void helpButtonPressed() {
-		IJ.runPlugIn("ij.plugin.BrowserLauncher", "https://imagej.net/Local_Thickness");
+		IJ.runPlugIn("ij.plugin.BrowserLauncher", "https://imagej.net/plugins/local-thickness");
 	}
 
 	@Override

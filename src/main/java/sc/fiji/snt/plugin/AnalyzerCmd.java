@@ -2,7 +2,7 @@
  * #%L
  * Fiji distribution of ImageJ for the life sciences.
  * %%
- * Copyright (C) 2010 - 2021 Fiji developers.
+ * Copyright (C) 2010 - 2022 Fiji developers.
  * %%
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as
@@ -51,10 +51,12 @@ import sc.fiji.snt.gui.cmds.CommonDynamicCmd;
 
 /**
  * Command for measuring Tree(s).
+ * @deprecated replaced by {@link sc.fiji.snt.gui.MeasureUI }
  *
  * @author Tiago Ferreira
  */
 @Plugin(type = Command.class, visible = false, label="Measure...", initializer = "init")
+@Deprecated
 public class AnalyzerCmd extends CommonDynamicCmd {
 
 	private static final String TABLE_TITLE = "SNT Measurements";
@@ -108,8 +110,8 @@ public class AnalyzerCmd extends CommonDynamicCmd {
 	@Parameter(label = MultiTreeStatistics.AVG_FRACTAL_DIMENSION)
 	private boolean avgFractalDimension;
 
-	@Parameter(label = MultiTreeStatistics.AVG_SPINE_DENSITY)
-	private boolean avgSpineDensity;
+	@Parameter(label = MultiTreeStatistics.PATH_SPINE_DENSITY)
+	private boolean spineDensity;
 
 	@Parameter(label = MultiTreeStatistics.N_BRANCH_POINTS)
 	private boolean nBPs;
@@ -224,7 +226,7 @@ public class AnalyzerCmd extends CommonDynamicCmd {
 		} else if (tree != null) {
 			// caller specified a single tree
 			resolveInput("trees");
-		} else if (trees != null) {
+		} else {
 			// caller specified a collection of trees
 			resolveInput("tree");
 		}
@@ -273,7 +275,7 @@ public class AnalyzerCmd extends CommonDynamicCmd {
 		avgRemoteAngle = enable;
 		avgPartitionAsymmetry = enable;
 		avgFractalDimension = enable;
-		avgSpineDensity = enable;
+		spineDensity = enable;
 		cableLength = enable;
 		depth = enable;
 		height = enable;
@@ -310,7 +312,7 @@ public class AnalyzerCmd extends CommonDynamicCmd {
 		avgRemoteAngle = !avgRemoteAngle;
 		avgPartitionAsymmetry = !avgPartitionAsymmetry;
 		avgFractalDimension = !avgFractalDimension;
-		avgSpineDensity = !avgSpineDensity;
+		spineDensity = !spineDensity;
 		cableLength = !cableLength;
 		depth = !depth;
 		height = !height;
@@ -350,7 +352,7 @@ public class AnalyzerCmd extends CommonDynamicCmd {
 		if(avgRemoteAngle) metrics.add(MultiTreeStatistics.AVG_REMOTE_ANGLE);
 		if(avgPartitionAsymmetry) metrics.add(MultiTreeStatistics.AVG_PARTITION_ASYMMETRY);
 		if(avgFractalDimension) metrics.add(MultiTreeStatistics.AVG_FRACTAL_DIMENSION);
-		if(avgSpineDensity) metrics.add(MultiTreeStatistics.AVG_SPINE_DENSITY);
+		if(spineDensity) metrics.add(MultiTreeStatistics.PATH_SPINE_DENSITY);
 		if(cableLength) metrics.add(MultiTreeStatistics.LENGTH);
 		if(terminalLength) metrics.add(MultiTreeStatistics.TERMINAL_LENGTH);
 		if(primaryLength) metrics.add(MultiTreeStatistics.PRIMARY_LENGTH);
@@ -411,7 +413,7 @@ public class AnalyzerCmd extends CommonDynamicCmd {
 	}
 
 	private boolean validFile(final File file) {
-		return (pattern == null || pattern.isEmpty()) ? true : file.getName().contains(pattern);
+		return (pattern == null || pattern.isEmpty()) || file.getName().contains(pattern);
 	}
 
 	private void measure(final Collection<Tree> trees, final List<String> metrics) {

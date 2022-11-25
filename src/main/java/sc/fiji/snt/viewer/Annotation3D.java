@@ -2,7 +2,7 @@
  * #%L
  * Fiji distribution of ImageJ for the life sciences.
  * %%
- * Copyright (C) 2010 - 2021 Fiji developers.
+ * Copyright (C) 2010 - 2022 Fiji developers.
  * %%
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as
@@ -31,6 +31,7 @@ import java.util.List;
 import net.imagej.mesh.Mesh;
 import net.imagej.mesh.Triangle;
 import net.imagej.mesh.Triangles;
+import net.imglib2.roi.geom.real.Polygon2D;
 
 import org.jzy3d.colors.Color;
 import org.jzy3d.maths.Coord3d;
@@ -121,6 +122,15 @@ public class Annotation3D {
 		this.label = label;
 	}
 
+	public Annotation3D(final Polygon2D polygon, final ColorRGB color, final String label) {
+		this.viewer = null;
+		this.points = null;
+		type = SURFACE;
+		size = Viewer3D.DEF_NODE_RADIUS;
+		drawable = polygonToDrawable(polygon, new Color(color.getRed(), color.getGreen(), color.getBlue()));
+		this.label = label;
+	}
+
 	public Annotation3D(final Mesh mesh, final String label) {
 		this.viewer = null;
 		this.points = null;
@@ -145,21 +155,35 @@ public class Annotation3D {
 		return meshToDrawable(mesh, new Color(1f, 1f, 1f, 0.05f));
 	}
 
+	private static Drawable polygonToDrawable(final Polygon2D polygon, final Color color) {
+		final Polygon polyg = new Polygon();
+		polygon.vertices().forEach(vx -> {
+			final double[] pos = vx.positionAsDoubleArray();
+			polyg.add(new Coord3d(pos[0], pos[1], 0));
+		});
+		final Shape surface = new Shape(Collections.singletonList(polyg));
+		surface.setColor(color.alphaSelf(0.25f));
+		surface.setWireframeColor(Utils.contrastColor(color).alphaSelf(0.8f));
+		surface.setFaceDisplayed(true);
+		surface.setWireframeDisplayed(true);
+		return surface;
+	}
+
 	private static Drawable meshToDrawable(Mesh mesh, final Color color) {
-		Triangles faces = mesh.triangles();
-		Iterator<Triangle> faceIter = faces.iterator();
-		ArrayList<ArrayList<Coord3d>> coord3dFaces = new ArrayList<ArrayList<Coord3d>>();
+		final Triangles faces = mesh.triangles();
+		final Iterator<Triangle> faceIter = faces.iterator();
+		final ArrayList<ArrayList<Coord3d>> coord3dFaces = new ArrayList<>();
 		while (faceIter.hasNext()) {
-			ArrayList<Coord3d> simplex = new ArrayList<Coord3d>();
-			Triangle t = faceIter.next();
+			final ArrayList<Coord3d> simplex = new ArrayList<>();
+			final Triangle t = faceIter.next();
 			simplex.add(new Coord3d(t.v0x(), t.v0y(), t.v0z()));
 			simplex.add(new Coord3d(t.v1x(), t.v1y(), t.v1z()));
 			simplex.add(new Coord3d(t.v2x(), t.v2y(), t.v2z()));
 			coord3dFaces.add(simplex);
 		}
-		List<Polygon> polygons = new ArrayList<Polygon>();
-		for (ArrayList<Coord3d> face : coord3dFaces) {
-			Polygon polygon = new Polygon();
+		final List<Polygon> polygons = new ArrayList<>();
+		for (final ArrayList<Coord3d> face : coord3dFaces) {
+			final Polygon polygon = new Polygon();
 			polygon.add(new Point(face.get(0)));
 			polygon.add(new Point(face.get(1)));
 			polygon.add(new Point(face.get(2)));
@@ -300,9 +324,6 @@ public class Annotation3D {
 			((Scatter) drawable).setColor(c);
 			break;
 		case SURFACE:
-			((Shape) drawable).setColor(c);
-			((Shape) drawable).setWireframeColor(Viewer3D.Utils.contrastColor(c));
-			break;
 		case SURFACE_AND_VOLUME:
 			((Shape) drawable).setColor(c);
 			((Shape) drawable).setWireframeColor(Viewer3D.Utils.contrastColor(c));

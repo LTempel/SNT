@@ -2,7 +2,7 @@
  * #%L
  * Fiji distribution of ImageJ for the life sciences.
  * %%
- * Copyright (C) 2010 - 2021 Fiji developers.
+ * Copyright (C) 2010 - 2022 Fiji developers.
  * %%
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as
@@ -31,7 +31,6 @@ import org.scijava.ItemIO;
 import org.scijava.ItemVisibility;
 import org.scijava.command.Command;
 import org.scijava.command.CommandService;
-import org.scijava.command.ContextCommand;
 import org.scijava.display.Display;
 import org.scijava.display.DisplayService;
 import org.scijava.plugin.Parameter;
@@ -52,7 +51,9 @@ import sc.fiji.snt.analysis.sholl.math.LinearProfileStats;
 import sc.fiji.snt.analysis.sholl.math.NormalizedProfileStats;
 import sc.fiji.snt.analysis.sholl.parsers.TreeParser;
 import sc.fiji.snt.gui.GuiUtils;
+import sc.fiji.snt.gui.cmds.CommonDynamicCmd;
 import sc.fiji.snt.util.Logger;
+import sc.fiji.snt.viewer.Viewer3D;
 
 /**
  * A modified version of {@link ShollAnalysisTreeCmd} for Bulk Sholl Analysis.
@@ -60,7 +61,7 @@ import sc.fiji.snt.util.Logger;
  * @author Tiago Ferreira
  */
 @Plugin(type = Command.class, visible = false, label = "Bulk Sholl Analysis (Tracings)", initializer = "init")
-public class ShollAnalysisBulkTreeCmd extends ContextCommand
+public class ShollAnalysisBulkTreeCmd extends CommonDynamicCmd
 {
 
 	@Parameter
@@ -77,11 +78,11 @@ public class ShollAnalysisBulkTreeCmd extends ContextCommand
 			label = ShollAnalysisImgCmd.HEADER_HTML + "Input:")
 	private String HEADER0;
 
-	@Parameter(label = "Directory", type = ItemIO.INPUT, style = FileWidget.DIRECTORY_STYLE, //
+	@Parameter(required = false, label = "Directory", type = ItemIO.INPUT, style = FileWidget.DIRECTORY_STYLE, //
 			description = ShollAnalysisImgCmd.HEADER_TOOLTIP + "Input folder containing reconstruction files.")
 	private File directory;
 
-	@Parameter(label = "Filename filter", required=false, 
+	@Parameter(required = false, label = "Filename filter",
 			description="Only filenames matching this string (case sensitive) will be considered. "
 			+ "Regex patterns accepted. Leave empty to disable fitering.")
 	private String filenamePattern;
@@ -95,7 +96,15 @@ public class ShollAnalysisBulkTreeCmd extends ContextCommand
 		"Paths tagged as 'Custom'", "Paths tagged as 'Undefined'" })
 	private String filterChoice;
 
-	@Parameter(label = "Center", choices = { "Soma",
+	@Parameter(label = "Center",  required = false, //
+		description = "Root nodes correspond to the starting nodes of primary (root) paths of the specified type.\n" //
+			+ "If multiple primary paths exits, center becomes the centroid (mid-point) of the identified\n"
+			+ "starting node(s).\n \n" //
+			+ "If 'Soma node(s): Ignore connectivity' is chosen, the centroid of soma-tagged nodes is \n"
+			+ "used, even if such paths are not at the root.", //
+		choices = { 
+		"Soma node(s): Ignore connectivity",
+		"Soma node(s): Primary paths only",
 		"Root node(s)",
 		"Root node(s): Primary axon(s)",
 		"Root node(s): Primary (basal) dendrites(s)",
@@ -128,11 +137,11 @@ public class ShollAnalysisBulkTreeCmd extends ContextCommand
 		label = "<html><i>Sholl Decay:")
 	private String HEADER2B;
 
-	@Parameter(label = "Method", choices = { "Automatically choose", "Semi-Log",
+	@Parameter(label = "Method", required = false, choices = { "Automatically choose", "Semi-Log",
 		"Log-log" })
 	private String normalizationMethodDescription;
 
-	@Parameter(label = "Normalizer", choices = { "Default", "Area/Volume",
+	@Parameter(label = "Normalizer", required = false, choices = { "Default", "Area/Volume",
 		"Perimeter/Surface area", "Annulus/Spherical shell" },
 		callback = "normalizerDescriptionChanged")
 	private String normalizerDescription;
@@ -141,11 +150,11 @@ public class ShollAnalysisBulkTreeCmd extends ContextCommand
 		label = ShollAnalysisImgCmd.HEADER_HTML + "<br>Output:")
 	private String HEADER3;
 
-	@Parameter(label = "Plots", choices = { "Linear plot", "Normalized plot",
+	@Parameter(label = "Plots",  required = false, choices = { "Linear plot", "Normalized plot",
 		"Linear & normalized plots", "None" })
 	private String plotOutputDescription;
 
-	@Parameter(label = "Tables", choices = {"Summary table", "Detailed & Summary tables"})
+	@Parameter(label = "Tables", required = false, choices = {"Summary table", "Detailed & Summary tables"})
 	private String tableOutputDescription;
 
 	@Parameter(required = false, label = "Destination", type = ItemIO.INPUT, style = FileWidget.DIRECTORY_STYLE, //
@@ -153,11 +162,22 @@ public class ShollAnalysisBulkTreeCmd extends ContextCommand
 					+ "Destination directory. NB: Files will be overwritten on re-runs.")
 	private File saveDir;
 
+	@Parameter(required = false, label = "Display outputs",//
+			description = ShollAnalysisImgCmd.HEADER_TOOLTIP
+					+ "Whether plots and tables should be displayed after being saved")
+	private boolean showAnalysis;
+	
 	@Parameter(required = false, visibility = ItemVisibility.MESSAGE, label = "<HTML>&nbsp;") // empty label
 	private String HEADER4;
 
 	@Parameter(label = " Options, Preferences and Resources... ", callback = "runOptions")
 	private Button optionsButton;
+
+	@Parameter(required = false)
+	private List<Tree> treeList;
+	@Parameter(required = false)
+	private Viewer3D recViewer;
+	private boolean validDir;
 
 
 	/* Instance variables */
@@ -173,7 +193,10 @@ public class ShollAnalysisBulkTreeCmd extends ContextCommand
 	@Override
 	public void run() {
 
-		final List<Tree> treeList = Tree.listFromDir(directory.getAbsolutePath(), filenamePattern, getSWCTypes());
+		if (treeList == null || treeList.isEmpty()) {
+			treeList = Tree.listFromDir(directory.getAbsolutePath(), filenamePattern, getSWCTypes());
+			logger.info("Found " + treeList.size() + " reconstructions in " + directory.getAbsolutePath());
+		}
 		if (treeList == null || treeList.isEmpty()) {
 			final String msg = (filenamePattern == null || filenamePattern.isEmpty())
 					? "No reconstruction files found in input folder."
@@ -181,26 +204,48 @@ public class ShollAnalysisBulkTreeCmd extends ContextCommand
 			helper.error(msg, "No Files in Input Directory");
 			return;
 		}
-		if (saveDir == null || !saveDir.exists() || !saveDir.canWrite()) {
-			helper.error("Output directory is not valid or writable.", "Please Change Output Directory");
+		validDir = saveDir != null && saveDir.exists() && saveDir.canWrite();
+		if (!showAnalysis && !validDir) {
+			helper.error("Display of outputs disabled and output directory is not valid or writable.", "Please Change Output Directory");
 			return;
 		}
+		
+		if (recViewer != null && recViewer.getManagerPanel() != null) {
+			recViewer.getManagerPanel().showProgress(-1, -1);
+		}
+
+		// defaults when prompt is not displayed
+		if (tableOutputDescription == null || tableOutputDescription.isEmpty())
+			tableOutputDescription = "Summary table";
+		if (plotOutputDescription == null || plotOutputDescription.isEmpty())
+			plotOutputDescription = "Linear plot";
+		if (plotOutputDescription == null || plotOutputDescription.isEmpty())
+			plotOutputDescription = "Linear plot";
+		if (normalizerDescription == null || normalizerDescription.isEmpty())
+			normalizerDescription = "Default";
+		if (normalizationMethodDescription == null || normalizationMethodDescription.isEmpty())
+			normalizationMethodDescription = "Automatically choose";
+		if (centerChoice == null || centerChoice.isEmpty())
+			centerChoice = "Root node(s)";
+		
 		logger = new Logger(context(), "Sholl");
-		logger.info("Found " + treeList.size() + " reconstructions in " + directory.getAbsolutePath());
 		logger.info("Running multithreaded analysis...");
 		readPreferences();
+		commonSummaryTable = new ShollTable();
 		treeList.parallelStream().forEach(tree -> {
 			new AnalysisRunner(tree).run();
 		});
 		logger.info("Done.");
-		if (commonSummaryTable == null) {
+		if (commonSummaryTable == null || commonSummaryTable.isEmpty() || commonSummaryTable.getRowCount() < 1) {
 			cancel("Options were likely invalid and no files were parsed. See Console for details.");
 		} else if (commonSummaryTable.hasUnsavedData() && !saveSummaryTable()) {
 			cancel("An Error occured while saving summary table. Please save it manually.");
 		}
+		if (recViewer != null && recViewer.getManagerPanel() != null) {
+			recViewer.getManagerPanel().showProgress(0, 0);
+		}
 
 	}
-
 
 	private String[] getSWCTypes() {
 		final String normChoice = filterChoice.toLowerCase();
@@ -252,6 +297,14 @@ public class ShollAnalysisBulkTreeCmd extends ContextCommand
 	@SuppressWarnings("unused")
 	private void init() {
 		helper = new GuiUtils();
+		if (treeList != null) {
+			resolveInput("HEADER0");
+			resolveInput("directory");
+			resolveInput("filenamePattern");
+		} else {
+			resolveInput("treeList");
+		}
+		logger = new Logger(getContext(), "Sholl B.A.");
 	}
 
 	@SuppressWarnings("unused")
@@ -403,17 +456,23 @@ public class ShollAnalysisBulkTreeCmd extends ContextCommand
 			// Plots
 			if (plotOutputDescription.toLowerCase().contains("linear")) {
 				final ShollPlot lPlot = lStats.getPlot(false);
-				if (lPlot.save(saveDir))
-					logger.info(TREE_LABEL + " Linear plot saved...");
-				else
-					logger.warn(TREE_LABEL + " Error while saving linear plot");
+				if (validDir) {
+					if (lPlot.save(saveDir))
+						logger.info(TREE_LABEL + " Linear plot saved...");
+					else
+						logger.warn(TREE_LABEL + " Error while saving linear plot");
+				}
+				if (showAnalysis) lPlot.show();
 			}
 			if (plotOutputDescription.toLowerCase().contains("normalized")) {
 				final ShollPlot nPlot = nStats.getPlot(false);
-				if (nPlot.save(saveDir))
-					logger.info(TREE_LABEL + " Normalized plot saved...");
-				else
-					logger.warn(TREE_LABEL + " Error while saving normalized plot");
+				if (validDir) {
+					if (nPlot.save(saveDir))
+						logger.info(TREE_LABEL + " Normalized plot saved...");
+					else
+						logger.warn(TREE_LABEL + " Error while saving normalized plot");
+				}
+				if (showAnalysis) nPlot.show();
 			}
 
 			// Tables
@@ -421,19 +480,21 @@ public class ShollAnalysisBulkTreeCmd extends ContextCommand
 				final ShollTable dTable = new ShollTable(lStats, nStats);
 				dTable.listProfileEntries();
 				if (!dTable.hasContext()) dTable.setContext(getContext());
-				if (dTable.saveSilently(new File(saveDir, TREE_LABEL + "_profile.csv")))
-					logger.info(TREE_LABEL + " Detailed table saved...");
-				else
-					logger.warn(TREE_LABEL + " Error while saving detailed table");
+				if (validDir) {
+					if (dTable.saveSilently(new File(saveDir, TREE_LABEL + "_profile.csv")))
+						logger.info(TREE_LABEL + " Detailed table saved...");
+					else
+						logger.warn(TREE_LABEL + " Error while saving detailed table");
+				}
+				if (showAnalysis) dTable.show();
 			}
 
 			final ShollTable sTable = new ShollTable(lStats, nStats);
-			if (commonSummaryTable == null) commonSummaryTable = new ShollTable();
 			String header = TREE_LABEL;
 			if (!filterChoice.contains("None")) header += "(" + filterChoice + ")";
 			if (!sTable.hasContext()) sTable.setContext(getContext());
 			sTable.summarize(commonSummaryTable, header);
-			updateDisplayAndSaveCommonSummaryTable();
+			threadService.queue(() -> updateDisplayAndSaveCommonSummaryTable());
 		}
 
 	}

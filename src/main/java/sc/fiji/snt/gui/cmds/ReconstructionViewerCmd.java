@@ -2,7 +2,7 @@
  * #%L
  * Fiji distribution of ImageJ for the life sciences.
  * %%
- * Copyright (C) 2010 - 2021 Fiji developers.
+ * Copyright (C) 2010 - 2022 Fiji developers.
  * %%
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as
@@ -52,10 +52,15 @@ public class ReconstructionViewerCmd extends ContextCommand {
 	 */
 	@Override
 	public void run() {
-		SNTUtils.setIsLoading(true);
-		GuiUtils.setLookAndFeel();
-		final Viewer3D viewer = new Viewer3D(getContext());
-		viewer.show();
+		try {
+			SNTUtils.setIsLoading(true);
+			GuiUtils.setLookAndFeel();
+			new Viewer3D(getContext()).show();
+		} catch (final NoClassDefFoundError e) {
+			e.printStackTrace();
+		} finally {
+			SNTUtils.setIsLoading(false);
+		}
 	}
 
 	/* IDE debug method **/

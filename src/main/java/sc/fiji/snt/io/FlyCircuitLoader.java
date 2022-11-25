@@ -2,7 +2,7 @@
  * #%L
  * Fiji distribution of ImageJ for the life sciences.
  * %%
- * Copyright (C) 2010 - 2021 Fiji developers.
+ * Copyright (C) 2010 - 2022 Fiji developers.
  * %%
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as
@@ -31,7 +31,6 @@ import java.net.URL;
 
 import sc.fiji.snt.PathAndFillManager;
 import sc.fiji.snt.Tree;
-import sc.fiji.snt.TreeProperties;
 
 /**
  * Absurdly simple importer for retrieving SWC data from
@@ -121,8 +120,8 @@ public class FlyCircuitLoader implements RemoteSWCLoader {
 		if (pafm.importSWC(cellId, getReconstructionURL(cellId))) {
 			final Tree tree = new Tree(pafm.getPaths());
 			tree.setLabel(cellId);
-			tree.getProperties().setProperty(TreeProperties.KEY_SPATIAL_UNIT, "um");
-			tree.getProperties().setProperty(TreeProperties.KEY_SOURCE, "FlyCircuit"+VERSION);
+			tree.getProperties().setProperty(Tree.KEY_SPATIAL_UNIT, "um");
+			tree.getProperties().setProperty(Tree.KEY_SOURCE, "FlyCircuit"+VERSION);
 			return tree;
 		}
 		return null;

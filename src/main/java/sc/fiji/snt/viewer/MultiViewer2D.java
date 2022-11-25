@@ -2,7 +2,7 @@
  * #%L
  * Fiji distribution of ImageJ for the life sciences.
  * %%
- * Copyright (C) 2010 - 2021 Fiji developers.
+ * Copyright (C) 2010 - 2022 Fiji developers.
  * %%
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as
@@ -32,7 +32,6 @@ import java.util.List;
 
 import javax.swing.JFrame;
 
-import org.jfree.chart.ChartFrame;
 import org.jfree.chart.ChartPanel;
 import org.jfree.chart.ChartUtils;
 import org.jfree.chart.JFreeChart;
@@ -41,15 +40,15 @@ import org.jfree.chart.plot.CombinedRangeXYPlot;
 import org.jfree.chart.plot.XYPlot;
 import org.jfree.chart.title.PaintScaleLegend;
 import org.jfree.chart.ui.RectangleEdge;
-import org.scijava.Context;
 
 import net.imagej.ImageJ;
 import net.imagej.display.ColorTables;
-import net.imagej.lut.LUTService;
 import net.imglib2.display.ColorTable;
 import sc.fiji.snt.SNTService;
+import sc.fiji.snt.SNTUtils;
 import sc.fiji.snt.Tree;
 import sc.fiji.snt.analysis.MultiTreeColorMapper;
+import sc.fiji.snt.analysis.SNTChart;
 import sc.fiji.snt.analysis.TreeColorMapper;
 import sc.fiji.snt.util.PointInImage;
 import sc.fiji.snt.analysis.sholl.math.LinearProfileStats;
@@ -111,7 +110,7 @@ public class MultiViewer2D {
 	}
 
 	public void setColorBarLegend(final String lut, final double min, final double max) {
-		final TreeColorMapper lutRetriever = new TreeColorMapper(new Context(LUTService.class));
+		final TreeColorMapper lutRetriever = new TreeColorMapper(SNTUtils.getContext());
 		final ColorTable colorTable = lutRetriever.getColorTable(lut);
 		setColorBarLegend(colorTable, min, max);
 	}
@@ -191,8 +190,8 @@ public class MultiViewer2D {
 		final GridLayout gridLayout = new GridLayout(rows.size(), 1);
 		frame.setLayout(gridLayout);
 		for (final List<Viewer2D> row : rows) {
-			final JFreeChart rowChart = getMergedChart(row, "col");
-			final ChartPanel cPanel = getChartPanel(rowChart);
+			final SNTChart rowChart = getMergedChart(row, "col");
+			final ChartPanel cPanel = rowChart.getChartPanel();
 			frame.add(cPanel);
 			rowPanels.add(cPanel);
 		}
@@ -200,7 +199,7 @@ public class MultiViewer2D {
 		return frame;
 	}
 
-	private JFreeChart getMergedChart(final List<Viewer2D> viewers, final String style) {
+	private SNTChart getMergedChart(final List<Viewer2D> viewers, final String style) {
 		JFreeChart result;
 		if (style != null && style.toLowerCase().startsWith("c")) { // column
 			final CombinedRangeXYPlot mergedPlot = new CombinedRangeXYPlot();
@@ -217,7 +216,7 @@ public class MultiViewer2D {
 		} else {
 			final CombinedDomainXYPlot mergedPlot = new CombinedDomainXYPlot();
 			for (final Viewer2D viewer : viewers) {
-				mergedPlot.add(viewer.getJFreeChart().getXYPlot(), 1);
+				mergedPlot.add(viewer.getChart().getChartPanel().getChart().getXYPlot(), 1);
 			}
 			result = new JFreeChart(null, mergedPlot);
 		}
@@ -231,15 +230,7 @@ public class MultiViewer2D {
 			}
 			result.addSubtitle(legend);
 		}
-		return result;
-	}
-
-	private ChartPanel getChartPanel(final JFreeChart chart) {
-		final ChartFrame cFrame = new ChartFrame("", chart);
-		chart.setBackgroundPaint(null); // transparent
-		chart.getPlot().setBackgroundPaint(null); // transparent
-		cFrame.getChartPanel().setBackground(null); // transparent
-		return cFrame.getChartPanel();
+		return new SNTChart("", result);
 	}
 
 	/* IDE debug method */

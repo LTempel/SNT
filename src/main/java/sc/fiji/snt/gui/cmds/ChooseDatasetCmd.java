@@ -2,7 +2,7 @@
  * #%L
  * Fiji distribution of ImageJ for the life sciences.
  * %%
- * Copyright (C) 2010 - 2021 Fiji developers.
+ * Copyright (C) 2010 - 2022 Fiji developers.
  * %%
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as
@@ -30,6 +30,7 @@ import java.util.List;
 
 import net.imagej.ImageJ;
 import net.imagej.legacy.LegacyService;
+import sc.fiji.snt.SNTPrefs;
 
 import org.scijava.command.Command;
 import org.scijava.module.MutableModuleItem;
@@ -56,22 +57,31 @@ public class ChooseDatasetCmd extends CommonDynamicCmd {
 
 	@Parameter(label = "New tracing image:", persist = false, required = false,
 		style = ChoiceWidget.RADIO_BUTTON_VERTICAL_STYLE)
-	protected String choice;
+	private String choice;
 
 	@Parameter(label = "Validate spatial calibration", required = false,
 		description = "Checks whether voxel dimensions of chosen image differ from those of loaded image (if any)")
-	protected boolean validateCalibration;
+	private boolean validateCalibration;
 
-	protected HashMap<String, ImagePlus> impMap;
+	@Parameter(label = "Keep loaded image open", required = false,
+		description = "If the image currently loaded should remain open or instead disposed")
+	private boolean restoreImg;
+
+	private HashMap<String, ImagePlus> impMap;
 
 	@Override
 	public void run() {
 		if (impMap == null || choice == null || impMap.isEmpty()) {
 			error("No other open images seem to be available.");
-		}
-		else {
-			final ImagePlus chosenImp = impMap.get(choice);
-			if (compatibleCalibration(chosenImp)) snt.initialize(chosenImp);
+		} else {
+			ImagePlus chosenImp = impMap.get(choice);
+			if (!compatibleCalibration(chosenImp))
+				return;
+			
+			snt.getPrefs().setTemp(SNTPrefs.RESTORE_LOADED_IMGS, restoreImg);
+			chosenImp = comvertInPlaceToCompositeAsNeeded(chosenImp);
+			if (chosenImp.getType() != ImagePlus.COLOR_RGB)
+				snt.initialize(chosenImp);
 		}
 		resetUI();
 	}
@@ -112,6 +122,10 @@ public class ChooseDatasetCmd extends CommonDynamicCmd {
 			resolveInputs();
 			return;
 		}
+		if (!snt.accessToValidImageData()) {
+			restoreImg = false;
+			resolveInput("restoreImg");
+		}
 		final List<String> choices = new ArrayList<>(impMap.keySet());
 		Collections.sort(choices);
 		mItem.setChoices(choices);
@@ -122,9 +136,10 @@ public class ChooseDatasetCmd extends CommonDynamicCmd {
 		choice = null;
 		resolveInput("choice");
 		resolveInput("validateCalibration");
+		resolveInput("restoreImg");
 	}
 
-	protected Collection<ImagePlus> getImpInstances() {
+	public static Collection<ImagePlus> getImpInstances() {
 		// In theory we should be able to use legacyService to retrieve
 		// all the images but somehow this can never retrieve the full
 		// list of current available instances:
@@ -133,10 +148,15 @@ public class ChooseDatasetCmd extends CommonDynamicCmd {
 		final Collection<ImagePlus> imps = new ArrayList<>();
 		for (final String title : titles) {
 			// ignore side panes
-			if (title.startsWith("ZY [") || title.startsWith("XZ [")) continue;
+			//if (title.startsWith("ZY [") || title.startsWith("XZ [")) continue;
 			imps.add(WindowManager.getImage(title));
 		}
 		return imps;
+	}
+
+	public static ImagePlus getCurrentImage() {
+//		return legacyService.getImageMap().lookupImagePlus(imageDisplayService.getActiveImageDisplay());;
+		return WindowManager.getCurrentImage();
 	}
 
 	public static void main(final String... args) {

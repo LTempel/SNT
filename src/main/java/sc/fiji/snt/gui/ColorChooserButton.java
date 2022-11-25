@@ -2,7 +2,7 @@
  * #%L
  * Fiji distribution of ImageJ for the life sciences.
  * %%
- * Copyright (C) 2010 - 2021 Fiji developers.
+ * Copyright (C) 2010 - 2022 Fiji developers.
  * %%
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as
@@ -77,7 +77,7 @@ public class ColorChooserButton extends JButton {
 			final String title = (thisButton.getName() == null) ? "Choose new color"
 				: "New " + thisButton.getName();
 			final Color newColor = new GuiUtils(SwingUtilities.getRoot(thisButton))
-				.getColor(title, getSelectedColor(), "HSB");
+				.getColor(title, getSelectedColor(), (String[])null);
 			setSelectedColor(newColor);
 
 		});

@@ -2,7 +2,7 @@
  * #%L
  * Fiji distribution of ImageJ for the life sciences.
  * %%
- * Copyright (C) 2010 - 2021 Fiji developers.
+ * Copyright (C) 2010 - 2022 Fiji developers.
  * %%
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as
@@ -37,11 +37,11 @@ import org.scijava.util.ColorRGB;
 import org.scijava.util.Colors;
 
 import net.imagej.ImageJ;
-import net.imagej.plot.LineStyle;
-import net.imagej.plot.MarkerStyle;
-import net.imagej.plot.PlotService;
-import net.imagej.plot.XYPlot;
-import net.imagej.plot.XYSeries;
+import org.scijava.plot.LineStyle;
+import org.scijava.plot.MarkerStyle;
+import org.scijava.plot.PlotService;
+import org.scijava.plot.XYPlot;
+import org.scijava.plot.XYSeries;
 import sc.fiji.snt.Path;
 import sc.fiji.snt.SNTService;
 import sc.fiji.snt.Tree;
@@ -65,32 +65,32 @@ public class PathSpineAnalysisCmd extends CommonDynamicCmd {
 	private PlotService plotService;
 
 	@Parameter(label = "X-Axis Metric", choices = { //
-			TreeStatistics.AVG_SPINE_DENSITY, //
+			TreeStatistics.PATH_SPINE_DENSITY, //
 			TreeStatistics.N_SPINES //
 	})
 	private String xAxisMetric;
 
 	@Parameter(label = "Y-axis Metric 1", choices = { //
 			TreeStatistics.PATH_LENGTH, TreeStatistics.N_BRANCH_POINTS, //
-			TreeStatistics.PATH_ORDER, TreeStatistics.MEAN_RADIUS, //
+			TreeStatistics.PATH_ORDER, TreeStatistics.PATH_MEAN_RADIUS, //
 	})
 	private String yAxisMetric1;
 
 	@Parameter(label = "Y-axis Metric 2", choices = { " - None -", //
 			TreeStatistics.PATH_LENGTH, TreeStatistics.N_BRANCH_POINTS, //
-			TreeStatistics.PATH_ORDER, TreeStatistics.MEAN_RADIUS, //
+			TreeStatistics.PATH_ORDER, TreeStatistics.PATH_MEAN_RADIUS, //
 	})
 	private String yAxisMetric2;
 
 	@Parameter(label = "Y-axis Metric 3", choices = { " - None -", //
 			TreeStatistics.PATH_LENGTH, TreeStatistics.N_BRANCH_POINTS, //
-			TreeStatistics.PATH_ORDER, TreeStatistics.MEAN_RADIUS, //
+			TreeStatistics.PATH_ORDER, TreeStatistics.PATH_MEAN_RADIUS, //
 	})
 	private String yAxisMetric3;
 
 	@Parameter(label = "Y-axis Metric 4", choices = { " - None -", //
 			TreeStatistics.PATH_LENGTH, TreeStatistics.N_BRANCH_POINTS, //
-			TreeStatistics.PATH_ORDER, TreeStatistics.MEAN_RADIUS, //
+			TreeStatistics.PATH_ORDER, TreeStatistics.PATH_MEAN_RADIUS, //
 	})
 	private String yAxisMetric4;
 
@@ -154,7 +154,7 @@ public class PathSpineAnalysisCmd extends CommonDynamicCmd {
 			final ColorRGB color) {
 		if (y != null) {
 			final XYSeries series = plot.addXYSeries();
-			series.setStyle(plot.newSeriesStyle(color, LineStyle.SOLID, MarkerStyle.FILLEDCIRCLE));
+			series.setStyle(plotService.newSeriesStyle(color, LineStyle.SOLID, MarkerStyle.FILLEDCIRCLE));
 			series.setValues(x, y);
 			series.setLabel(label);
 		}

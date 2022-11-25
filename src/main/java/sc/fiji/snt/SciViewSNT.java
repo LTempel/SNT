@@ -2,7 +2,7 @@
  * #%L
  * Fiji distribution of ImageJ for the life sciences.
  * %%
- * Copyright (C) 2010 - 2021 Fiji developers.
+ * Copyright (C) 2010 - 2022 Fiji developers.
  * %%
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as
@@ -94,7 +94,7 @@ public class SciViewSNT {
 		if (!EnableSciViewUpdateSiteCmd.isSciViewAvailable()) {
 			// If dependencies are missing, warn users politely
 			throw new NoClassDefFoundError(
-					"SciView is not available. Please see https://imagej.net/SNT#Installation for details");
+					"SciView is not available. Please see https://imagej.net/plugins/snt/#installation for details");
 		}
 		if (context == null) throw new NullContextException();
 		context.inject(this);
@@ -375,11 +375,12 @@ public class SciViewSNT {
 			final List<Node> lines = new ArrayList<>();
 			final List<PointInImage> somaPoints = new ArrayList<>();
 			final List<Color> somaColors = new ArrayList<>();
+			final boolean validSoma = tree.validSoma();
 
 			for (final Path p : tree.list()) {
 
 				// Stash soma coordinates
-				if (Path.SWC_SOMA == p.getSWCType()) {
+				if (validSoma && Path.SWC_SOMA == p.getSWCType()) {
 					for (int i = 0; i < p.size(); i++) {
 						final PointInImage pim = p.getNodeWithoutChecks(i);
 						pim.v = p.getNodeRadius(i);

@@ -2,7 +2,7 @@
  * #%L
  * Fiji distribution of ImageJ for the life sciences.
  * %%
- * Copyright (C) 2010 - 2021 Fiji developers.
+ * Copyright (C) 2010 - 2022 Fiji developers.
  * %%
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as
@@ -173,7 +173,7 @@ public class SaveMeasurementsCmd extends CommonDynamicCmd {
 		nIJ1Tables = Math.min(MAX_N, ij1Tables.size());
 
 		// get SNTCharts and IJ1Plots
-		sntCharts = getSNTCharts();
+		sntCharts = SNTChart.openCharts();
 		nSNTCharts = Math.min(MAX_N, sntCharts.size());
 		ij1Plots = getIJ1Plots();
 		nIJ1Plots = Math.min(MAX_N, ij1Plots.size());
@@ -304,16 +304,6 @@ public class SaveMeasurementsCmd extends CommonDynamicCmd {
 			}
 		}
 		return ij1Plots;
-	}
-
-	private List<SNTChart> getSNTCharts() {
-		sntCharts = new ArrayList<>();
-		for (final Window win : Window.getWindows()) {
-			if (win != null && win instanceof SNTChart && ((SNTChart)win).containsValidData()) {
-				sntCharts.add((SNTChart) win);
-			}
-		}
-		return sntCharts;
 	}
 
 	private String getTableLabel(final TableDisplay tableDisplay) {

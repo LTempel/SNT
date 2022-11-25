@@ -2,7 +2,7 @@
  * #%L
  * Fiji distribution of ImageJ for the life sciences.
  * %%
- * Copyright (C) 2010 - 2021 Fiji developers.
+ * Copyright (C) 2010 - 2022 Fiji developers.
  * %%
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as
@@ -54,7 +54,8 @@ import sc.fiji.snt.util.PointInImage;
 import sc.fiji.snt.util.SWCPoint;
 
 /**
- * Class for analysis of {@link Tree}s
+ * Class for 'entry-level' analysis of a {@link Tree}s. For more sophisticated
+ * analysis have a look at {@link TreeStatistics}
  *
  * @author Tiago Ferreira
  */
@@ -284,7 +285,7 @@ public class TreeAnalyzer extends ContextCommand {
 	 * @see #setTable(DefaultGenericTable)
 	 */
 	public void summarize(final String rowHeader, final boolean groupByType) {
-		measure(rowHeader, getMetrics(), true);
+		measure(rowHeader, TreeStatistics.getMetrics("common"), true);
 	}
 
 	protected int getNextRow(final String rowHeader) {
@@ -298,35 +299,45 @@ public class TreeAnalyzer extends ContextCommand {
 	 * {@link #getAllMetrics()}
 	 * 
 	 * @return the list of available metrics
-	 * @see MultiTreeStatistics#getMetrics()
+	 * @see TreeStatistics#getMetrics(String)
 	 */
+	@SuppressWarnings("deprecation")
 	public static List<String> getMetrics() {
-		final ArrayList<String> metrics = new ArrayList<>(MultiTreeStatistics.getMetrics());
-		metrics.add("Sholl: "+ ShollAnalyzer.MEAN);
+		final ArrayList<String> metrics = new ArrayList<>();
+		metrics.add(MultiTreeStatistics.ASSIGNED_VALUE);
+		metrics.add(MultiTreeStatistics.AVG_BRANCH_LENGTH);
+		metrics.add(MultiTreeStatistics.AVG_CONTRACTION);
+		metrics.add(MultiTreeStatistics.AVG_FRACTAL_DIMENSION);
+		metrics.add(MultiTreeStatistics.AVG_FRAGMENTATION);
+		metrics.add(MultiTreeStatistics.AVG_PARTITION_ASYMMETRY);
+		metrics.add(MultiTreeStatistics.AVG_REMOTE_ANGLE);
+		metrics.add(MultiTreeStatistics.HIGHEST_PATH_ORDER);
+		metrics.add(TreeStatistics.AVG_SPINE_DENSITY);
+		metrics.add(TreeStatistics.DEPTH);
+		metrics.add(TreeStatistics.HEIGHT);
+		metrics.add(TreeStatistics.INNER_LENGTH);
+		metrics.add(TreeStatistics.LENGTH);
+		metrics.add(TreeStatistics.N_BRANCH_POINTS);
+		metrics.add(TreeStatistics.N_BRANCHES);
+		metrics.add(TreeStatistics.N_FITTED_PATHS);
+		metrics.add(TreeStatistics.N_INNER_BRANCHES);
+		metrics.add(TreeStatistics.N_NODES);
+		metrics.add(TreeStatistics.N_PATHS);
+		metrics.add(TreeStatistics.N_PRIMARY_BRANCHES);
+		metrics.add(TreeStatistics.N_SPINES);
+		metrics.add(TreeStatistics.N_TERMINAL_BRANCHES);
+		metrics.add(TreeStatistics.N_TIPS);
+		metrics.add(TreeStatistics.PATH_MEAN_RADIUS);
+		metrics.add(TreeStatistics.PRIMARY_LENGTH);
+		metrics.add(TreeStatistics.STRAHLER_NUMBER);
+		metrics.add(TreeStatistics.STRAHLER_RATIO);
+		metrics.add(TreeStatistics.TERMINAL_LENGTH);
+		metrics.add(TreeStatistics.WIDTH);
 		metrics.add("Sholl: "+ ShollAnalyzer.SUM);
 		metrics.add("Sholl: "+ ShollAnalyzer.MAX);
 		metrics.add("Sholl: "+ ShollAnalyzer.N_MAX);
 		metrics.add("Sholl: "+ ShollAnalyzer.N_SECONDARY_MAX);
-		metrics.add("Sholl: "+ ShollAnalyzer.MAX_FITTED);
-		metrics.add("Sholl: "+ ShollAnalyzer.MAX_FITTED_RADIUS);
 		metrics.add("Sholl: "+ ShollAnalyzer.POLY_FIT_DEGREE);
-		metrics.add("Sholl: "+ ShollAnalyzer.DECAY);
-		return metrics;
-	}
-
-	/**
-	 * Gets the list of <i>all</i> supported metrics.
-	 *
-	 * @return the list of available metrics
-	 * 
-	 * @return the list of all available metrics
-	 * @see MultiTreeStatistics#getAllMetrics()
-	 */
-	public static List<String> getAllMetrics() {
-		final ArrayList<String> metrics = new ArrayList<>(MultiTreeStatistics.getAllMetrics());
-		for (final String sm : ShollAnalyzer.ALL_FLAGS) {
-			metrics.add("Sholl: "+ sm);
-		}
 		return metrics;
 	}
 
@@ -346,7 +357,7 @@ public class TreeAnalyzer extends ContextCommand {
 	 * @see #getMetrics()
 	 */
 	public Number getMetric(final String metric) throws IllegalArgumentException {
-		return getMetricInternal(MultiTreeStatistics.getNormalizedMeasurement(metric, false));
+		return getMetricInternal(TreeStatistics.getNormalizedMeasurement(metric));
 	}
 
 	protected Number getMetricInternal(final String metric) {
@@ -358,6 +369,7 @@ public class TreeAnalyzer extends ContextCommand {
 		}
 	}
 
+	@SuppressWarnings("deprecation")
 	protected Number getMetricWithoutChecks(final String metric) throws UnknownMetricException {
 		switch (metric) {
 		case MultiTreeStatistics.ASSIGNED_VALUE:
@@ -374,59 +386,71 @@ public class TreeAnalyzer extends ContextCommand {
 			return getAvgPartitionAsymmetry();
 		case MultiTreeStatistics.AVG_FRACTAL_DIMENSION:
 			return getAvgFractalDimension();
-		case MultiTreeStatistics.AVG_SPINE_DENSITY:
+		case MultiTreeStatistics.PRIMARY_LENGTH:
+			return getPrimaryLength();
+		case MultiTreeStatistics.TERMINAL_LENGTH:
+			return getTerminalLength();
+		case MultiTreeStatistics.INNER_LENGTH:
+			return getInnerLength();
+		case TreeStatistics.AVG_SPINE_DENSITY:
+		case TreeStatistics.PATH_SPINE_DENSITY:
 			return getSpineOrVaricosityDensity();
-		case MultiTreeStatistics.DEPTH:
+		case TreeStatistics.DEPTH:
 			return getDepth();
-		case MultiTreeStatistics.HEIGHT:
+		case TreeStatistics.HEIGHT:
 			return getHeight();
 		case MultiTreeStatistics.HIGHEST_PATH_ORDER:
 			return getHighestPathOrder();
-		case MultiTreeStatistics.LENGTH:
+		case TreeStatistics.LENGTH:
 			return getCableLength();
+		case TreeStatistics.PATH_MEAN_RADIUS:
 		case MultiTreeStatistics.MEAN_RADIUS:
 			final TreeStatistics treeStats = new TreeStatistics(tree);
-			return treeStats.getSummaryStats(TreeStatistics.MEAN_RADIUS).getMean();
-		case MultiTreeStatistics.N_BRANCH_POINTS:
+			return treeStats.getSummaryStats(TreeStatistics.PATH_MEAN_RADIUS).getMean();
+		case TreeStatistics.N_BRANCH_POINTS:
 			return getBranchPoints().size();
-		case MultiTreeStatistics.N_BRANCHES:
+		case TreeStatistics.N_BRANCHES:
 			return getNBranches();
-		case MultiTreeStatistics.N_FITTED_PATHS:
+		case TreeStatistics.N_FITTED_PATHS:
 			return getNFittedPaths();
-		case MultiTreeStatistics.N_NODES:
-			return tree.getNodes().size();
-		case MultiTreeStatistics.N_PATHS:
+		case TreeStatistics.N_NODES:
+			return getNNodes();
+		case TreeStatistics.N_PATHS:
 			return getNPaths();
-		case MultiTreeStatistics.N_PRIMARY_BRANCHES:
+		case TreeStatistics.N_PRIMARY_BRANCHES:
 			return getPrimaryBranches().size();
-		case MultiTreeStatistics.N_INNER_BRANCHES:
+		case TreeStatistics.N_INNER_BRANCHES:
 			return getInnerBranches().size();
-		case MultiTreeStatistics.N_TERMINAL_BRANCHES:
+		case TreeStatistics.N_TERMINAL_BRANCHES:
 			return getTerminalBranches().size();
-		case MultiTreeStatistics.N_TIPS:
+		case TreeStatistics.N_TIPS:
 			return getTips().size();
-		case MultiTreeStatistics.N_SPINES:
+		case TreeStatistics.N_SPINES:
 			return getNoSpinesOrVaricosities();
-		case MultiTreeStatistics.PRIMARY_LENGTH:
+		case TreeStatistics.PRIMARY_LENGTH:
 			return getPrimaryLength();
-		case MultiTreeStatistics.INNER_LENGTH:
+		case TreeStatistics.INNER_LENGTH:
 			return getInnerLength();
-		case MultiTreeStatistics.STRAHLER_NUMBER:
+		case TreeStatistics.STRAHLER_NUMBER:
 			return getStrahlerNumber();
-		case MultiTreeStatistics.STRAHLER_RATIO:
+		case TreeStatistics.STRAHLER_RATIO:
 			return getStrahlerBifurcationRatio();
-		case MultiTreeStatistics.TERMINAL_LENGTH:
+		case TreeStatistics.TERMINAL_LENGTH:
 			return getTerminalLength();
-		case MultiTreeStatistics.WIDTH:
+		case TreeStatistics.WIDTH:
 			return getWidth();
 		default:
 			if (metric.startsWith("Sholl: ")) {
-				final String fMetric = metric.substring(metric.indexOf("Sholl: ") + 6).trim();
-				return getShollAnalyzer().getSingleValueMetrics().getOrDefault(fMetric, Double.NaN);
+				return getShollMetric(metric);
 			}
 			throw new UnknownMetricException("Unrecognizable measurement \"" + metric + "\". "
 					+ "Maybe you meant one of the following?: \"" + String.join(", ", getMetrics() + "\""));
 		}
+	}
+
+	protected Number getShollMetric(final String metric) {
+		final String fMetric = metric.substring(metric.indexOf("Sholl: ") + 6).trim();
+		return getShollAnalyzer().getSingleValueMetrics().getOrDefault(fMetric, Double.NaN);
 	}
 
 	/**
@@ -460,8 +484,7 @@ public class TreeAnalyzer extends ContextCommand {
 		if (table == null) table = new SNTTable();
 		final Collection<String> measuringMetrics = (metrics == null || metrics.isEmpty()) ? getMetrics() : metrics;
 		if (groupByType) {
-			for (final int type : tree.getSWCTypes()) {
-				if (type == Path.SWC_SOMA) continue;
+			for (final int type : tree.getSWCTypes(false)) {
 				restrictToSWCType(type);
 				final int row = getNextRow(rowHeader);
 				table.set(getCol("SWC Type(s)"), row, Path.getSWCtypeName(type, true));
@@ -478,7 +501,7 @@ public class TreeAnalyzer extends ContextCommand {
 
 	protected String getSWCTypesAsString() {
 		final StringBuilder sb = new StringBuilder();
-		final Set<Integer> types = tree.getSWCTypes();
+		final Set<Integer> types = tree.getSWCTypes(true);
 		for (int type: types) {
 			sb.append(Path.getSWCtypeName(type, true)).append(" ");
 		}
@@ -551,16 +574,27 @@ public class TreeAnalyzer extends ContextCommand {
 		}
 	}
 
-	private String getUnitAwareHeader(final String metric) {
-		if (MultiTreeStatistics.WIDTH.equals(metric) || MultiTreeStatistics.HEIGHT.equals(metric)
-				|| MultiTreeStatistics.DEPTH.equals(metric) || MultiTreeStatistics.MEAN_RADIUS.equals(metric)
-				|| metric.toLowerCase().contains("length"))
-			return metric + " (" + tree.getProperties().getOrDefault(Tree.KEY_SPATIAL_UNIT, "N/A") + ")";
-		return metric;
+	public String getUnit(final String metric) {
+		final String m = metric.toLowerCase();
+		if (TreeStatistics.WIDTH.equals(metric) || TreeStatistics.HEIGHT.equals(metric)
+				|| TreeStatistics.DEPTH.equals(metric) || m.contains("length") || m.contains("radius")
+				|| m.contains("distance") || TreeStatistics.CONVEX_HULL_ELONGATION.equals(metric)) {
+			return (String) tree.getProperties().getOrDefault(Tree.KEY_SPATIAL_UNIT, "? units");
+		} else if (m.contains("volume")) {
+			return tree.getProperties().getOrDefault(Tree.KEY_SPATIAL_UNIT, "? units") + "^3";
+		} else if (m.contains("surface area")) {
+			return tree.getProperties().getOrDefault(Tree.KEY_SPATIAL_UNIT, "? units") + "^2";
+		} else if (TreeStatistics.CONVEX_HULL_SIZE.equals(metric)) {
+			return tree.getProperties().getOrDefault(Tree.KEY_SPATIAL_UNIT, "? units") + ((tree.is3D()) ? "^3" : "^2");
+		} else if (TreeStatistics.CONVEX_HULL_BOUNDARY_SIZE.equals(metric)) {
+			return tree.getProperties().getOrDefault(Tree.KEY_SPATIAL_UNIT, "? units") + ((tree.is3D()) ? "^2" : "");
+		}
+		return "";
 	}
 
 	protected int getCol(final String header) {
-		final String normHeader = getUnitAwareHeader(header);
+		final String unit = getUnit(header);
+		final String normHeader = (unit.length() > 1) ? header + " (" + unit + ")" : header;
 		int idx = table.getColumnIndex(normHeader);
 		if (idx == -1) {
 			table.appendColumn(normHeader);
@@ -967,7 +1001,7 @@ public class TreeAnalyzer extends ContextCommand {
 	 * @return the ShollAnalyzer instance associated with this analyzer
 	 */
 	public ShollAnalyzer getShollAnalyzer() {
-		if (shllAnalyzer == null) shllAnalyzer = new ShollAnalyzer(tree);
+		if (shllAnalyzer == null) shllAnalyzer = new ShollAnalyzer(tree, this);
 		return shllAnalyzer;
 	}
 
@@ -991,6 +1025,15 @@ public class TreeAnalyzer extends ContextCommand {
 	 */
 	public int getNBranches() throws IllegalArgumentException {
 		return getBranches().size();
+	}
+
+	/**
+	 * Gets the number of nodes in the analyzed tree.
+	 *
+	 * @return the number of nodes
+	 */
+	public long getNNodes() {
+		return tree.getNodesCount();
 	}
 
 	/**
@@ -1253,7 +1296,7 @@ public class TreeAnalyzer extends ContextCommand {
 		final SNTService sntService = ij.context().getService(SNTService.class);
 		final Tree tree = sntService.demoTrees().get(0);
 		final TreeAnalyzer analyzer = new TreeAnalyzer(tree);
-		TreeAnalyzer.getAllMetrics().forEach( m -> {
+		TreeAnalyzer.getMetrics().forEach( m -> {
 			System.out.println(m + ": " + analyzer.getMetric(m));
 		});
 	}

@@ -25,5 +25,5 @@ import sc.fiji.snt.plugin.*
 import sc.fiji.snt.util.*
 import sc.fiji.snt.viewer.*
 
-// Documentation Resources: https://imagej.net/SNT:_Scripting
-// Latest SNT API: https://morphonets.github.io/SNT/
+// Documentation Resources: https://imagej.net/plugins/snt/scripting
+// Latest SNT API: https://javadoc.scijava.org/SNT/

@@ -2,7 +2,7 @@
  * #%L
  * Fiji distribution of ImageJ for the life sciences.
  * %%
- * Copyright (C) 2010 - 2021 Fiji developers.
+ * Copyright (C) 2010 - 2022 Fiji developers.
  * %%
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as
@@ -27,7 +27,6 @@ import amira.AmiraParameters;
 import ij.IJ;
 import ij.ImagePlus;
 import ij.ImageStack;
-import ij.Prefs;
 import ij.gui.*;
 import ij.measure.Calibration;
 import ij.plugin.LutLoader;
@@ -220,6 +219,7 @@ public class SNT extends MultiDThreePanes implements
 	volatile protected boolean showOnlyActiveCTposPaths;
 	volatile protected boolean activateFinishedPath;
 	volatile protected boolean requireShiftToFork;
+	private boolean drawDiameters;
 
 	private boolean manualOverride = false;
 	private double fillThresholdDistance = 0.1d;
@@ -433,6 +433,14 @@ public class SNT extends MultiDThreePanes implements
 				if (dir != null && name != null)
 					prefs.setRecentDir(new File(dir));
 			}
+			// Adjust and reset min/max
+			if (sourceImage.getProcessor().isBinary()) {
+				stats.min = 0;
+				stats.max = 255;
+			} else {
+				stats.min = 0;
+				stats.max = 0;
+			}
 		} else {
 			pathAndFillManager.syncSpatialSettingsWithPlugin();
 		}
@@ -594,13 +602,19 @@ public class SNT extends MultiDThreePanes implements
 
 	@Override
 	public void initialize(final ImagePlus imp) {
+		final  Roi sourceImageROI = imp.getRoi();
+		if (accessToValidImageData() && getPrefs().getTemp(SNTPrefs.RESTORE_LOADED_IMGS, false)) {
+			rebuildWindow(xy);
+			xy = null;
+		}
 		nullifyCanvases();
 		setFieldsFromImage(imp);
 		changeUIState(SNTUI.LOADING);
 		initialize(getSinglePane(), channel = imp.getC(), frame = imp.getT());
 		tracingHalted = !inputImageLoaded();
 		updateUIFromInitializedImp(imp.isVisible());
-	}
+		xy.setRoi(sourceImageROI);
+	 }
 
 	/**
 	 * Initializes the plugin by assembling all the required tracing views
@@ -1018,6 +1032,10 @@ public class SNT extends MultiDThreePanes implements
 	}
 
 	public void justDisplayNearSlices(final boolean value, final int eitherSide) {
+		justDisplayNearSlices(value, eitherSide, true);
+	}
+
+	protected void justDisplayNearSlices(final boolean value, final int eitherSide, final boolean updateViewers) {
 
 		getXYCanvas().just_near_slices = value;
 		if (!single_pane) {
@@ -2504,8 +2522,9 @@ public class SNT extends MultiDThreePanes implements
 	}
 
 	protected void invalidStatsError(final boolean isSecondary) {
-		guiUtils.error("Statistics for the " + (isSecondary ? "Secondary Layer" : "main image") +
-				" have not been computed. Trace a small path over a relevant feature to compute them.");
+		guiUtils.error("Statistics for the " + (isSecondary ? "Secondary Layer" : "main image")
+				+ " have not been computed yet. Please trace a small path over a relevant feature to compute them."
+				+ " This will allow SNT to better understand the dynamic range of the image.");
 	}
 
 	protected void setFillTransparent(final boolean transparent) {
@@ -2940,6 +2959,10 @@ public class SNT extends MultiDThreePanes implements
 
 	protected void showMessage(final String msg, final String title) {
 		new GuiUtils(getActiveWindow()).centeredMsg(msg, title);
+	}
+
+	protected InteractiveTracerCanvas getTracingCanvas() {
+		return xy_tracer_canvas;
 	}
 
 	private Component getActiveCanvas() {
@@ -3430,16 +3453,13 @@ public class SNT extends MultiDThreePanes implements
 		return singleSlice;
 	}
 
-	protected boolean drawDiametersXY = Prefs.get(
-		"tracing.Simple_Neurite_Tracer.drawDiametersXY", "false").equals("true");
-
-	public void setDrawDiametersXY(final boolean draw) {
-		drawDiametersXY = draw;
+	public void setDrawDiameters(final boolean draw) {
+		drawDiameters = draw;
 		repaintAllPanes();
 	}
 
-	public boolean getDrawDiametersXY() {
-		return drawDiametersXY;
+	public boolean getDrawDiameters() {
+		return drawDiameters;
 	}
 
 	@Override

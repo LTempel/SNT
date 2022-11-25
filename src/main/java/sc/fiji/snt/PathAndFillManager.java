@@ -2,7 +2,7 @@
  * #%L
  * Fiji distribution of ImageJ for the life sciences.
  * %%
- * Copyright (C) 2010 - 2021 Fiji developers.
+ * Copyright (C) 2010 - 2022 Fiji developers.
  * %%
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as
@@ -43,6 +43,7 @@ import sc.fiji.snt.analysis.graph.DirectedWeightedGraph;
 import sc.fiji.snt.analysis.graph.SWCWeightedEdge;
 import sc.fiji.snt.gui.GuiUtils;
 import sc.fiji.snt.io.MouseLightLoader;
+import sc.fiji.snt.io.NDFImporter;
 import sc.fiji.snt.io.NeuroMorphoLoader;
 import sc.fiji.snt.tracing.FillerThread;
 import sc.fiji.snt.util.*;
@@ -85,6 +86,7 @@ public class PathAndFillManager extends DefaultHandler implements
 	protected static final int TRACES_FILE_TYPE_UNCOMPRESSED_XML = 2;
 	protected static final int TRACES_FILE_TYPE_SWC = 3;
 	protected static final int TRACES_FILE_TYPE_ML_JSON = 4;
+	protected static final int TRACES_FILE_TYPE_NDF = 5;
 
 	private static final DecimalFormat fileIndexFormatter = new DecimalFormat(
 		"000");
@@ -1029,12 +1031,50 @@ public class PathAndFillManager extends DefaultHandler implements
 	}
 
 	/**
-	 * Adds a {@link Tree}.
+	 * Adds a {@link Tree}. If an image is currently being traced, it is assumed it
+	 * is large enough to contain the tree.
 	 *
 	 * @param tree the collection of paths to be added
 	 */
 	public void addTree(final Tree tree) {
 		tree.list().forEach(p -> addPath(p, true, true));
+	}
+
+	/**
+	 * Adds a {@link Tree}. If an image is currently being traced, it is assumed it
+	 * is large enough to contain the tree.
+	 *
+	 * @param tree      the collection of paths to be added
+	 * @param commonTag a custom name tag to be applied to all Paths
+	 */
+	public void addTree(final Tree tree, final String commonTag) {
+		tree.list().forEach(p -> {
+			prepPathForAdding(p, true, true, true);
+			String tags = PathManagerUI.extractTagsFromPath(p);
+			if (tags.isEmpty())
+				tags = commonTag;
+			else
+				tags += ", " + commonTag;
+			p.setName(p.getName() + " {" + tags + "}");
+			addPathInternal(p);
+		});
+	}
+
+	/**
+	 * Adds a collection of {@link Tree}s.
+	 *
+	 * @param trees             the collection of trees to be added
+	 */
+	public void addTrees(final Collection<Tree> trees) {
+		if (boundingBox == null)
+			boundingBox = new BoundingBox();
+		trees.forEach(tree -> {
+			if (tree != null && !tree.isEmpty()) {
+				addTree(tree, tree.getLabel());
+				boundingBox.append(tree.getNodes().iterator());
+			}
+		});
+		checkForAppropriateImageDimensions();
 	}
 
 	/**
@@ -1048,10 +1088,11 @@ public class PathAndFillManager extends DefaultHandler implements
 
 	public void addPath(final Path p, final boolean retainTags) {
 		final String tags = PathManagerUI.extractTagsFromPath(p);
-		addPath(p, true, true);
+		prepPathForAdding(p, true, true, true);
 		if (retainTags) {
-			p.setName((tags.isEmpty()) ? p.getName() : p.getName() + "{" + tags + "}");
+			p.setName((tags.isEmpty()) ? p.getName() : p.getName() + " {" + tags + "}");
 		}
+		addPathInternal(p);
 	}
 
 	public synchronized void addPath(final Path p,
@@ -1063,6 +1104,12 @@ public class PathAndFillManager extends DefaultHandler implements
 	protected synchronized void addPath(final Path p,
 		final boolean forceNewName, final boolean forceNewId, final boolean assumeMaxUsedTreeID)
 	{
+		prepPathForAdding(p, forceNewName, forceNewId, assumeMaxUsedTreeID);
+		addPathInternal(p);
+	}
+
+	private synchronized void prepPathForAdding(final Path p,
+			final boolean forceNewName, final boolean forceNewId, final boolean assumeMaxUsedTreeID) {
 		final boolean isPrimary = p.isPrimary();
 		if (isPrimary) ++maxUsedTreeID;
 		if (!forceNewId && getPathFromID(p.getID()) != null) throw new IllegalArgumentException(
@@ -1083,7 +1130,6 @@ public class PathAndFillManager extends DefaultHandler implements
 			final String suggestedName = getDefaultName(p);
 			p.setName(suggestedName);
 		}
-		addPathInternal(p);
 	}
 
 	public synchronized void addPath(final Path p, final int id, final int treeID) {
@@ -1487,7 +1533,9 @@ public class PathAndFillManager extends DefaultHandler implements
 		}
 		pw.print(startsString);
 		pw.print(endsString);
-		pw.print(" name=\"" + XMLFunctions.escapeForXMLAttributeValue(p.getName()) + "\"");
+		final String name = (plugin != null && plugin.ui != null) ? plugin.ui.getPathManager().untaggedPathName(p)
+				: p.getName();
+		pw.print(" name=\"" + XMLFunctions.escapeForXMLAttributeValue(name) + "\"");
 		pw.print(" reallength=\"" + p.getLength() + "\"");
 		pw.println(">");
 
@@ -2194,7 +2242,7 @@ public class PathAndFillManager extends DefaultHandler implements
 				addPath(currentPath);
 				final String tags = point.getTags();
 				if (tags != null && !tags.isEmpty()) {
-					currentPath.setName(currentPath.getName() + "{" + tags + "}");
+					currentPath.setName(currentPath.getName() + " {" + tags + "}");
 				}
 				currentPath.setSWCType(point.type);
 				currentPath.setGuessedTangents(2);
@@ -2359,6 +2407,9 @@ public class PathAndFillManager extends DefaultHandler implements
 
 		} finally {
 			enableUIupdates = existingEnableUiUpdates;
+		}
+		if (plugin != null && plugin.ui != null) {
+			plugin.ui.getPathManager().applyActiveTags(getPaths());
 		}
 		resetListeners(null, true);
 		return true;
@@ -2585,12 +2636,12 @@ public class PathAndFillManager extends DefaultHandler implements
 			if (point.parent == -1) {
 				primaryPoints.add(point);
 			}
-			else {
-				final SWCPoint previousPoint = idToSWCPoint.get(point.parent);
-				if (previousPoint != null) {
-					point.setPreviousPoint(previousPoint);
-					previousPoint.getNextPoints().add(point);
-				}
+		}
+		for (final SWCPoint point : points) {
+			final SWCPoint previousPoint = idToSWCPoint.get(point.parent);
+			if (previousPoint != null) {
+				point.setPreviousPoint(previousPoint);
+				previousPoint.getNextPoints().add(point);
 			}
 		}
 
@@ -2625,8 +2676,6 @@ public class PathAndFillManager extends DefaultHandler implements
 		final PriorityQueue<SWCPoint> backtrackTo = new PriorityQueue<>(
 			primaryPoints);
 		final HashMap<Path, SWCPoint> pathStartsOnSWCPoint = new HashMap<>();
-		final HashMap<Path, PointInImage> pathStartsAtPointInImage =
-			new HashMap<>();
 		final List<Path> pathList = new ArrayList<>();
 
 		SWCPoint start;
@@ -2637,7 +2686,6 @@ public class PathAndFillManager extends DefaultHandler implements
 			final SWCPoint beforeStart = start.getPreviousPoint();
 			if (beforeStart != null) {
 				pathStartsOnSWCPoint.put(currentPath, beforeStart);
-				pathStartsAtPointInImage.put(currentPath, beforeStart);
 			}
 
 			// Now we can start adding points to the path:
@@ -2645,32 +2693,23 @@ public class PathAndFillManager extends DefaultHandler implements
 			while (currentPoint != null) {
 				currentPath.addNode(currentPoint);
 				pointToPath.put(currentPoint, currentPath);
-
-				if (currentPoint.getNextPoints().size() > 0) {
-					final SWCPoint newCurrentPoint = currentPoint.getNextPoints().get(0);
-					currentPoint.getNextPoints().remove(0);
+				if (!currentPoint.getNextPoints().isEmpty()) {
+					final SWCPoint finalCurrentPoint = currentPoint;
+					final SWCPoint childWithSameType = currentPoint.getNextPoints().stream()
+							.filter(c -> c.type == finalCurrentPoint.type)
+							.findFirst()
+							.orElse(null);
+					currentPoint.getNextPoints().remove(childWithSameType);
 					backtrackTo.addAll(currentPoint.getNextPoints());
-					currentPoint = newCurrentPoint;
-				}
-				else {
-					currentPath.setSWCType(currentPoint.type); // Assign point
-					// type to path
+					if (childWithSameType == null)
+						currentPath.setSWCType(currentPoint.type);
+					currentPoint = childWithSameType;
+
+				} else {
+					currentPath.setSWCType(currentPoint.type);
 					currentPoint = null;
 				}
 			}
-
-			// FIXME: DUP NODES: Paths contain duplicated nodes!! Remove them here:
-//			for (int i = 0; i < currentPath.size(); i++) {
-//				final PointInImage node1 = currentPath.getNode(i);
-//				for (int j = 1; j < currentPath.size(); j++) {
-//					if (i == j) continue;
-//					final PointInImage node2 = currentPath.getNode(j);
-//					if (node2.isSameLocation(node1)) {
-//						System.out.println("Removing "+ node2);
-//						currentPath.removeNode(j);
-//					}
-//				}
-//			}
 			currentPath.setGuessedTangents(2);
 			currentPath.setIDs(currentPath.getID(), maxUsedTreeID);
 			pathList.add(currentPath);
@@ -2689,7 +2728,7 @@ public class PathAndFillManager extends DefaultHandler implements
 				continue;
 			}
 			final Path previousPath = pointToPath.get(swcPoint);
-			final PointInImage pointInImage = pathStartsAtPointInImage.get(p);
+			final PointInImage pointInImage = pathStartsOnSWCPoint.get(p);
 			p.setStartJoin(previousPath, pointInImage);
 		}
 
@@ -2888,6 +2927,8 @@ public class PathAndFillManager extends DefaultHandler implements
 			return TRACES_FILE_TYPE_UNCOMPRESSED_XML;
 		} else if (((char) (buf[0] & 0xFF) == '{')) {
 			return TRACES_FILE_TYPE_ML_JSON;
+		} else if (((char) (buf[0] & 0xFF) == '/')) {
+			return TRACES_FILE_TYPE_NDF;
 		}
 		return TRACES_FILE_TYPE_SWC;
 	}
@@ -2936,6 +2977,20 @@ public class PathAndFillManager extends DefaultHandler implements
 		}
 	}
 
+	private boolean loadNDF(final String filename) {
+		try {
+			final NDFImporter importer = new NDFImporter(filename);
+			final Collection<Tree> trees = importer.getTrees();
+			trees.forEach( tree -> addTree(tree, tree.getLabel()));
+			final boolean sucess = trees.stream().anyMatch(tree -> tree != null && !tree.isEmpty());
+			if (sucess) updateBoundingBox();
+			return sucess;
+		} catch (final IOException | IllegalArgumentException e) {
+			error("Failed to read file: '" + filename + "' (" + e.getMessage() +")");
+			return false;
+		}
+	}
+
 	/**
 	 * Imports a reconstruction file (any supported extension).
 	 *
@@ -2960,6 +3015,9 @@ public class PathAndFillManager extends DefaultHandler implements
 				break;
 			case TRACES_FILE_TYPE_ML_JSON:
 				result = loadJSON(filePath, swcTypes);
+				break;
+			case TRACES_FILE_TYPE_NDF:
+				result = loadNDF(filePath);
 				break;
 			case TRACES_FILE_TYPE_SWC:
 				result = importSWC(filePath, false, 0, 0, 0, 1, 1, 1, true, swcTypes);
@@ -3000,7 +3058,7 @@ public class PathAndFillManager extends DefaultHandler implements
 			break;
 		case TRACES_FILE_TYPE_SWC:
 			final BufferedReader br = new BufferedReader(new InputStreamReader(bis, StandardCharsets.UTF_8));
-			result = plugin.getPathAndFillManager().importSWC(br, optionalDescription, false, 0, 0, 0, 1, 1, 1, true);
+			result = importSWC(br, optionalDescription, false, 0, 0, 0, 1, 1, 1, true);
 			break;
 		default:
 			SNTUtils.warn("guessTracesFileType() return an unknown type" + guessedType);

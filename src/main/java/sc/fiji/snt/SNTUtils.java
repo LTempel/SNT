@@ -2,7 +2,7 @@
  * #%L
  * Fiji distribution of ImageJ for the life sciences.
  * %%
- * Copyright (C) 2010 - 2021 Fiji developers.
+ * Copyright (C) 2010 - 2022 Fiji developers.
  * %%
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as
@@ -24,6 +24,7 @@ package sc.fiji.snt;
 
 import java.awt.Color;
 import java.awt.GraphicsEnvironment;
+import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileFilter;
 import java.io.FileOutputStream;
@@ -83,7 +84,7 @@ public class SNTUtils {
 
 	private SNTUtils() {}
 
-	private synchronized static void initialize() {
+	private static synchronized void initialize() {
 		if (initialized) return;
 		if (context == null) getContext();
 		if (logService == null) logService = context.getService(LogService.class);
@@ -267,19 +268,21 @@ public class SNTUtils {
 
 	public static void saveTable(final Table<?, ?> table, final char columnSep, final boolean saveColHeaders,
 			final boolean saveRowHeaders, final File outputFile) throws IOException {
-		final PrintWriter pw = new PrintWriter(
-				new OutputStreamWriter(new FileOutputStream(outputFile.getAbsolutePath()), StandardCharsets.UTF_8));
+		if(!outputFile.exists()) outputFile.getParentFile().mkdirs();
+		final FileOutputStream fos = new FileOutputStream(outputFile, false);
+		final OutputStreamWriter osw = new OutputStreamWriter(fos, StandardCharsets.UTF_8);
+		final PrintWriter pw = new PrintWriter(new BufferedWriter(osw), true);
 		final int columns = table.getColumnCount();
 		final int rows = table.getRowCount();
 		final boolean saveRows = saveRowHeaders && table.getRowHeader(0) != null;
 		// Print a column header to hold row headers
 		if (saveRows) {
-			SNTUtils.csvQuoteAndPrint(pw, "-");
+			csvQuoteAndPrint(pw, "-");
 			pw.print(columnSep);
 		}
 		if (saveColHeaders) {
 			for (int col = 0; col < columns; ++col) {
-				SNTUtils.csvQuoteAndPrint(pw, table.getColumnHeader(col));
+				csvQuoteAndPrint(pw, table.getColumnHeader(col));
 				if (col < (columns - 1))
 					pw.print(columnSep);
 			}
@@ -287,11 +290,11 @@ public class SNTUtils {
 		}
 		for (int row = 0; row < rows; row++) {
 			if (saveRows) {
-				SNTUtils.csvQuoteAndPrint(pw, table.getRowHeader(row));
+				csvQuoteAndPrint(pw, table.getRowHeader(row));
 				pw.print(columnSep);
 			}
 			for (int col = 0; col < columns; col++) {
-				SNTUtils.csvQuoteAndPrint(pw, table.get(col, row));
+				csvQuoteAndPrint(pw, table.get(col, row));
 				if (col < (columns - 1))
 					pw.print(columnSep);
 			}
@@ -300,7 +303,7 @@ public class SNTUtils {
 		pw.close();
 	}
 
-	protected static boolean fileAvailable(final File file) {
+	public static boolean fileAvailable(final File file) {
 		try {
 			return file != null && file.exists();
 		}
@@ -434,7 +437,7 @@ public class SNTUtils {
 		final double pixelHeightDifference = Math.abs(ay - by);
 		if (pixelHeightDifference > epsilon) return false;
 		final double pixelDepthDifference = Math.abs(az - bz);
-		return !(pixelDepthDifference > epsilon);
+		return pixelDepthDifference <= epsilon;
 	}
 
 	public static String getSanitizedUnit(final String unit) {
@@ -514,7 +517,7 @@ public class SNTUtils {
 	 *
 	 * @param dir     the directory containing the reconstruction files (.(e)swc,
 	 *                .traces, .json extension)
-	 * @param pattern the filename substring (case sensitive) to be matched. Only
+	 * @param pattern the filename substring (case-sensitive) to be matched. Only
 	 *                filenames containing {@code pattern} will be imported from the
 	 *                directory. {@code null} allowed.
 	 * @return the list of files. An empty list is retrieved if {@code dir} is not a
@@ -543,21 +546,27 @@ public class SNTUtils {
 	}
 
 	/**
-	 * Convenience method to access the context of the running Fiji instance (mainly
-	 * for IJ1 plugins.
+	 * Convenience method to access the context of the running Fiji instance
 	 * 
-	 * @return the context of the running Fiji instance
+	 * @return the context of the active ImageJ instance. Never null
 	 */
 	public static Context getContext() {
 		if (context == null) {
 			try {
-				context =  (Context) IJ.runPlugIn( "org.scijava.Context", "" );
+				if (ij.IJ.getInstance() != null)
+					context = (Context) IJ.runPlugIn("org.scijava.Context", "");
 			} catch (final Exception | Error ignored) {
 				error("Failed to retrieve context from IJ1", ignored);
-				context = new Context();
+			} finally {
+				if (context == null)
+					context = new Context();
 			}
 		}
 		return context;
+	}
+
+	public static boolean isContextSet() {
+		return null != SNTUtils.context;
 	}
 
 	public static void setContext(final Context context) {

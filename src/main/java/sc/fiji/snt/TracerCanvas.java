@@ -2,7 +2,7 @@
  * #%L
  * Fiji distribution of ImageJ for the life sciences.
  * %%
- * Copyright (C) 2010 - 2021 Fiji developers.
+ * Copyright (C) 2010 - 2022 Fiji developers.
  * %%
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as
@@ -89,7 +89,7 @@ public class TracerCanvas extends MultiDThreePanesCanvas {
 		final Color selectedColor = plugin.selectedColor;
 		final Color deselectedColor = plugin.deselectedColor;
 
-		final boolean drawDiametersXY = plugin.getDrawDiametersXY();
+		final boolean drawDiametersXY = plugin.getDrawDiameters();
 
 		if (pathAndFillManager != null) {
 			final Stroke stroke = g.getStroke();
@@ -121,7 +121,7 @@ public class TracerCanvas extends MultiDThreePanesCanvas {
 				else if (customColor) color = drawPath.getColor();
 
 				if (just_near_slices) {
-					drawPath.drawPathAsPoints(this, g, color, plane, (isSelected &&
+					drawPath.drawPathAsPoints(this, g, color, (isSelected &&
 						customColor), drawDiametersXY, current_z, eitherSide);
 				}
 				else {

@@ -4,11 +4,16 @@ This collection of notebooks demonstrates how to access the [SNT][] [API][] from
 Python environment.
 
 
+> :information_source: **These instructions were last tested on Ubuntu 22.04 (clean install) on 2022-05-06**
+
+
+
 ## Download
 To run these notebooks from your local machine, download all the files as a
 [ZIP archive](https://kinolien.github.io/gitzip/?download=https://github.com/morphonets/SNT/tree/master/notebooks)
-and unzip its contents to a local directory. Alternatively, download the files
+and unzip its contents to a local directory. You can also download the files
 manually from [GitHub](https://github.com/morphonets/SNT/tree/master/notebooks).
+Alternatively, you can clone/fork the entire repository. This may be more advantageous, as you will be able to keep your cloned/forked repository always up-to-date.
 
 
 ## Requirements
@@ -20,7 +25,7 @@ The core requirement are [pyimagej] and [Fiji](https://imagej.net/Fiji).
 
 ### To install pyimagej:
 
-1. Install [conda](https://www.anaconda.com/distribution/). See e.g., [here][pyimagej]
+1. Install [conda](https://www.anaconda.com/distribution/). See [documentation][pyimagejdocs]
    for details.
 
 2. Activate the [conda-forge](https://conda-forge.org/) channel and set it default:
@@ -30,7 +35,7 @@ The core requirement are [pyimagej] and [Fiji](https://imagej.net/Fiji).
   conda config --set channel_priority strict
   ```
 
-3. Install [pyimagej] into a new conda environment named `pyimagej`:
+3. Install [pyimagej][pyimagejdocs] into a new conda environment named `pyimagej`:
 
   ```bash
   conda create -n pyimagej pyimagej openjdk
@@ -72,14 +77,14 @@ Before running the notebooks, there are three more things to take care of:
 
   ```bash
   conda activate pyimagej
-  conda install jupyterlab matplotlib pandas seaborn scikit-learn
+  conda install pyqt jupyterlab matplotlib pandas seaborn scikit-learn
   ```
 
   However, some notebooks require other packages only in `conda-forge`:
 
   ```bash
   conda activate pyimagej
-  conda install trimesh
+  conda install --channel=conda-forge trimesh
   ```
   Some functionality may require [blender](https://www.blender.org/download/).
 
@@ -95,19 +100,34 @@ jupyter notebook
 ```
 
 (replacing `/path/to/notebooks/directory` with the path to the actual directory
-where you unzipped the _notebooks_ directory). If you prefer JupyterLab, replace
-`jupyter notebook` with `jupyter lab`. If not present, you may need to install
-jupyter on the `pyimagej` environment:
+where you unzipped the _notebooks_ directory).
+
+
+> :information_source: Some users have reported a `jupyter-notebook not found` error when calling jupyter notebook from the pyimagej environment. A quick workaround is to use jupyter-lab instead (see details below)
+
+
+If you prefer JupyterLab (or the 'regular' jupyter-notebook is failing from the pyimagej environment, replace
+`jupyter notebook` with `jupyter-lab`. If not present, you may need to install it on the `pyimagej` environment:
 
 ```bash
 conda activate pyimagej
 conda install jupyterlab
+jupyter-lab
 ```
-
 
 ## Troubleshooting
 
+> :warning: Running SNT from python is pretty much a bleeding edge experience. Things are being actively developed and somethings may break. That being said, it is certainly possible (hundreds of people use it frequently). Your feedback is key! Please do [reach out](https://forum.image.sc/) if you run into issues.
+
+
 ### Installation
+If your are are having problems setting up your conda environment, it may be useful
+to ensure your conda is up-to-date:
+
+```
+conda update -n base -c defaults conda
+```
+
 There have been confusing reports of errors related to missing `libjvm.so` files
 with java 8 (on Ubuntu 19.10). Adopting a newer openjdk (and pyjnius) seems to
 fix this:
@@ -181,20 +201,13 @@ For more details have a look at the [SNT](./1_overview.ipynb) and
 [pyimagej][pyimagej_intro] introductory notebooks.
 
 
-### Known Issues
-
-Collecting frames from [Viewer3D](https://morphonets.github.io/SNT/index.html?sc/fiji/snt/viewer/Viewer3D.html)
-may not work on multiple displays when initializing Viewer3D from a secondary
-display (at least on Ubuntu 19.10). The current workaround is to run the notebook
-on the primary display.
-
 
 ## Resources
 
 
 | SNT                                               | pyimagej                                               |
 |---------------------------------------------------|--------------------------------------------------------|
-| [Documentation][snt]                              | [Documentation][pyimagej]                              |
+| [Documentation][snt]                              | [Documentation][pyimagejdocs]                              |
 | [API]                                             | [Getting Started][pyimagej_intro]                      |
 | [Source code](https://github.com/morphonets/SNT)  | [Source code](https://github.com/imagej/pyimagej)      |
 | [Image.sc Forum](https://forum.image.sc/tag/snt/) | [Image.sc Forum](https://forum.image.sc/tag/pyimagej/) |
@@ -203,4 +216,5 @@ on the primary display.
 [snt]: https://imagej.net/SNT
 [api]: https://morphonets.github.io/SNT
 [pyimagej]: https://github.com/imagej/pyimagej
+[pyimagejdocs]: https://pyimagej.readthedocs.io/en/latest/
 [pyimagej_intro]: https://nbviewer.jupyter.org/github/imagej/tutorials/blob/master/notebooks/1-Using-ImageJ/6-ImageJ-with-Python-Kernel.ipynb

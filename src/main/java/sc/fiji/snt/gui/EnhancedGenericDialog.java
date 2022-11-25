@@ -2,7 +2,7 @@
  * #%L
  * Fiji distribution of ImageJ for the life sciences.
  * %%
- * Copyright (C) 2010 - 2021 Fiji developers.
+ * Copyright (C) 2010 - 2022 Fiji developers.
  * %%
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as
@@ -176,12 +176,6 @@ public class EnhancedGenericDialog extends GenericDialogPlus {
 	 */
 	public void assignPopupToHelpButton(final String buttonLabel, final JPopupMenu popupmenu) {
 		if (!isHeadless() && buttonLabel != null && popupmenu != null) {
-			// Ensure swing component is displayed with a java.awt look and feel
-			try {
-				UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
-				popupmenu.updateUI();
-			} catch (final Exception ignored) {
-			}
 			super.addHelp("");
 			super.setHelpLabel(buttonLabel);
 			labelOfHelpActionButton = buttonLabel;

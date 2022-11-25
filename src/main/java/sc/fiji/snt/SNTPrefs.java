@@ -2,7 +2,7 @@
  * #%L
  * Fiji distribution of ImageJ for the life sciences.
  * %%
- * Copyright (C) 2010 - 2021 Fiji developers.
+ * Copyright (C) 2010 - 2022 Fiji developers.
  * %%
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as
@@ -26,10 +26,16 @@ import java.awt.Point;
 import java.io.File;
 import java.util.HashSet;
 
+import javax.swing.LookAndFeel;
+import javax.swing.UIManager;
+
+import com.formdev.flatlaf.FlatLaf;
+
 import ij.Prefs;
 import ij.io.FileInfo;
 import ij3d.Content;
 import ij3d.ContentConstants;
+import sc.fiji.snt.analysis.SNTChart;
 import sc.fiji.snt.gui.GuiUtils;
 
 /**
@@ -41,8 +47,9 @@ public class SNTPrefs { // TODO: Adopt PrefService
 
 	public static final String NO_IMAGE_ASSOCIATED_DATA = "noImgData";
 	public static final String RESIZE_REQUIRED = "resizeNeeded";
+	public static final String RESTORE_LOADED_IMGS = "restoreLoadedImgs";
 
-	private static final int DRAW_DIAMETERS_XY = 1;
+	private static final int DRAW_DIAMETERS = 1;
 	private static final int SNAP_CURSOR = 2;
 	private static final int REQUIRE_SHIFT_FOR_FORK = 4;
 	private static final int AUTO_CANVAS_ACTIVATION = 8;
@@ -85,6 +92,7 @@ public class SNTPrefs { // TODO: Adopt PrefService
 		storeIJ1Prefs();
 		imposeIJ1Prefs();
 		wipeSessionPrefs();
+		SNTChart.setDefaultFontScale(Prefs.getGuiScale());
 	}
 
 	protected int get3DViewerResamplingFactor() {
@@ -154,7 +162,7 @@ public class SNTPrefs { // TODO: Adopt PrefService
 	}
 
 	private int getDefaultBooleans() {
-		return DRAW_DIAMETERS_XY + SNAP_CURSOR + COMPRESSED_XML + FORCE_2D_DISPLAY_CANVAS + AUTO_CANVAS_ACTIVATION;
+		return DRAW_DIAMETERS + SNAP_CURSOR + COMPRESSED_XML + FORCE_2D_DISPLAY_CANVAS;
 	}
 
 	private void getBooleans() {
@@ -169,7 +177,7 @@ public class SNTPrefs { // TODO: Adopt PrefService
 		snt.activateFinishedPath = getPref(AUTO_SELECTION_FINISHED_PATH);
 		snt.requireShiftToFork = getPref(REQUIRE_SHIFT_FOR_FORK);
 		snt.snapCursor = !snt.tracingHalted && getPref(SNAP_CURSOR);
-		snt.drawDiametersXY = getPref(DRAW_DIAMETERS_XY);
+		snt.setDrawDiameters(getPref(DRAW_DIAMETERS));
 		snt.displayCustomPathColors = !getPref(ENFORCE_DEFAULT_PATH_COLORS);
 		snt.setShowOnlySelectedPaths(getPref(SHOW_ONLY_SELECTED), false);
 		if (!SNTUtils.isDebugMode()) SNTUtils.setDebugMode(getPref(DEBUG));
@@ -226,7 +234,7 @@ public class SNTPrefs { // TODO: Adopt PrefService
 		if (!snt.tracingHalted) setPref(SNAP_CURSOR, snt.snapCursor);
 		Prefs.set(SNAP_XY, snt.cursorSnapWindowXY);
 		Prefs.set(SNAP_Z, snt.cursorSnapWindowZ);
-		setPref(DRAW_DIAMETERS_XY, snt.drawDiametersXY);
+		setPref(DRAW_DIAMETERS, snt.getDrawDiameters());
 		setPref(ENFORCE_DEFAULT_PATH_COLORS, !snt.displayCustomPathColors);
 		setPref(SHOW_ONLY_SELECTED, snt.showOnlySelectedPaths);
 		setPref(DEBUG, SNTUtils.isDebugMode());
@@ -315,15 +323,16 @@ public class SNTPrefs { // TODO: Adopt PrefService
 		Prefs.set(FILLWIN_LOC, null);
 		Prefs.set(PATHWIN_LOC, null);
 		Prefs.set(FILTERED_IMG_PATH, null);
-		setLookAndFeel(getDefaultLookAndFeel());
+		setLookAndFeel(null);
 		setThreads(0);
 		wipeSessionPrefs();
 		Prefs.savePreferences();
 	}
 
 	public static String getDefaultLookAndFeel() {
-		//return PlatformUtils.isLinux() ? GuiUtils.LAF_LIGHT  : GuiUtils.LAF_DEFAULT;
-		return GuiUtils.LAF_DEFAULT;
+		// If Fiji is using FlatLaf used that as default, otherwise use System L&F
+		final LookAndFeel currentLaf = UIManager.getLookAndFeel();
+		return (currentLaf instanceof FlatLaf) ? currentLaf.getName() : GuiUtils.LAF_DEFAULT;
 	}
 
 	private static void clearLegacyPrefs() {

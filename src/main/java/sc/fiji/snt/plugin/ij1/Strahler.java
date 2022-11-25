@@ -2,7 +2,7 @@
  * #%L
  * Fiji distribution of ImageJ for the life sciences.
  * %%
- * Copyright (C) 2010 - 2021 Fiji developers.
+ * Copyright (C) 2010 - 2022 Fiji developers.
  * %%
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as
@@ -57,17 +57,15 @@ import sc.fiji.snt.util.ColorMaps;
 
 /**
  * This class implements the ImageJ {@code Strahler Analysis} plugin. For more
- * information, visit the hIPNAT repository
- * {@literal https://github.com/tferr/hIPNAT} and the the plugin's documentation
- * page: {@literal http://imagej.net/Strahler_Analysis}
- *
+ * information, visit the plugin's documentation page:
+ * {@literal http://imagej.net/Strahler_Analysis}
  *
  * @author Tiago Ferreira
  */
 @SuppressWarnings("deprecation")
 public class Strahler implements PlugIn, DialogListener {
 
-	protected static final String URL = "https://imagej.net/Strahler_Analysis";
+	protected static final String URL = "https://imagej.net/plugins/strahler-analysis";
 
 	/* Default value for max. number of pruning cycles */
 	int maxOrder = 30;

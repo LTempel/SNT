@@ -2,7 +2,7 @@
  * #%L
  * Fiji distribution of ImageJ for the life sciences.
  * %%
- * Copyright (C) 2010 - 2021 Fiji developers.
+ * Copyright (C) 2010 - 2022 Fiji developers.
  * %%
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as
@@ -22,200 +22,551 @@
 
 package sc.fiji.snt.plugin;
 
+import ij.IJ;
 import ij.ImagePlus;
+import ij.gui.Roi;
+import net.imagej.ImageJ;
 
 import org.scijava.ItemVisibility;
 import org.scijava.command.Command;
 import org.scijava.module.MutableModuleItem;
 import org.scijava.plugin.Parameter;
 import org.scijava.plugin.Plugin;
+import org.scijava.util.ColorRGB;
 import org.scijava.widget.ChoiceWidget;
+import org.scijava.widget.FileWidget;
 
+import sc.fiji.snt.Path;
 import sc.fiji.snt.PathAndFillManager;
+import sc.fiji.snt.SNTService;
+import sc.fiji.snt.SNTUI;
+import sc.fiji.snt.SNTUtils;
 import sc.fiji.snt.Tree;
 import sc.fiji.snt.analysis.SkeletonConverter;
 import sc.fiji.snt.gui.GuiUtils;
 import sc.fiji.snt.gui.cmds.ChooseDatasetCmd;
+import sc.fiji.snt.gui.cmds.CommonDynamicCmd;
+import sc.fiji.snt.util.SNTColor;
 
+import java.io.File;
 import java.util.*;
-import java.util.stream.IntStream;
 
 /**
- * Command providing a GUI for {@link SkeletonConverter}
+ * Command providing a GUI for {@link SkeletonConverter}, SNT's autotracing
+ * class.
  *
  * @author Cameron Arshadi
  * @author Tiago Ferreira
  */
-@Plugin(type = Command.class, visible = false, label="Tree(s) from Skeleton Image...", initializer = "init")
-public class SkeletonConverterCmd extends ChooseDatasetCmd {
+@Plugin(type = Command.class, visible = false, label = "Automated Tracing: Tree(s) from Segmented Image...", initializer = "init")
+public class SkeletonConverterCmd extends CommonDynamicCmd {
 
-	@Parameter(label="Skeletonize image", description="<HTML>whether the segmented image should be skeletonized.<br>"
-			+ "Unnecessary if segmented image is already a topological sekeleton")
-	private boolean skeletonizeImage;
+	private static final String IMG_NONE= "None";
+	private static final String IMG_UNAVAILABLE_CHOICE = "No other image open";
+	private static final String IMG_TRACED_CHOICE = "Image being traced";
+	private static final String IMG_TRACED_DUP_CHOICE = "Image being traced (duplicate)";
+	private static final String IMG_TRACED_SEC_LAYER_CHOICE = "Secondary image layer";
 
-	@Parameter(label="<HTML>&nbsp;", required = false, visibility = ItemVisibility.MESSAGE)
-	private String SPACER;
+	@Parameter(required = false, persist = false, visibility = ItemVisibility.MESSAGE)
+	private final String msg1 = "<HTML>This command attempts to automatically reconstruct a pre-processed<br>" //
+			+ "image in which background pixels have been zeroed. Result can be<br>"
+			+ "curated using edit commands in Path Manager and image context menu.";
 
-	@Parameter(label="Prune by length", description="<HTML>Whether to remove sub-threshold length trees from the result")
+	@Parameter(label = "<HTML>&nbsp;<br><b> I. Input Image(s):", required = false, persist = false, visibility = ItemVisibility.MESSAGE)
+	private String HEADER1;
+
+	@Parameter(label = "Segmented Image", required = false, description = "<HTML>Image from which paths will be extracted. Will be skeletonized by the algorithm.<br>"
+			+ "If thresholded, only highlighted pixels are considered, otherwise all non-zero<br>intensities will be taken into account", style = ChoiceWidget.LIST_BOX_STYLE)
+	private String maskImgChoice;
+
+	@Parameter(label = "Path to segmented image", required = false, description = "<HTML>Path to filtered image from which paths will be extracted.<br>"//
+			+ "Will be skeletonized by the algorithm.<br>If thresholded, only highlighted pixels are considered, otherwise all non-zero<br>"
+			+ "intensities will be taken into account", style = FileWidget.OPEN_STYLE)
+	private File maskImgFileChoice;
+
+//	@Parameter(label = "Skeletonize", required = false, description = "<HTML>Whether segmented image should be skeletonized.<br>"
+//			+ "With 2D images isolated pixels are automatically filtered out from the skeleton.<br>"
+//			+ "Unnecessary if segmented image is already a topological sekeleton")
+//	private boolean skeletonizeMaskImage;
+
+	@Parameter(label = "Original Image", required = false, description = "<HTML>Optional. Original (un-processed) image used to resolve loops<br>"//
+			+ "in the segmented image using brightness criteria.<br>"
+			+ "If available: loops will be nicked at the dimmest voxel of the dimmest branch in the loop<br>"
+			+ "If unavailable: Loops will be nicked at the shortest branch in the loop", style = ChoiceWidget.LIST_BOX_STYLE)
+	private String originalImgChoice;
+
+	@Parameter(label = "Path to original image", required = false, description = "<HTML>Optional. Path to original (un-processed) image used to resolve<br>"//
+			+ "loops in the segmented image using brightness criteria.<br>"
+			+ "If available: loops will be nicked at the dimmest voxel of the dimmest branch in the loop<br>"
+			+ "If unavailable: Loops will be nicked at the shortest branch in the loop", style = FileWidget.OPEN_STYLE)
+	private File originalImgFileChoice;
+
+	@Parameter(label = "<HTML>&nbsp;<br><b> II. Root (Reconstruction Origin):", required = false, persist = false, visibility = ItemVisibility.MESSAGE)
+	private String HEADER2;
+
+	@Parameter(label = "Set root from ROI", description ="<HTML>Assumes that an active area ROI marks the root of the structure.<br>"
+			+ "If an ROI exists, the 'closest' end-point (or junction point) contained by the<br>"
+			+ "ROI becomes the root node. If no ROI exists, an arbitrary root node is used")
+	private boolean inferRootFromRoi;
+
+	@Parameter(label = "Restrict to active plane (3D only)", description = "<HTML>Assumes that the root highlighted by the ROI occurs at the<br>"
+			+ "ROI's Z-plane. Ensures other possible roots above or below<br>the ROI are not considered. Ignored if image is 2D")
+	private boolean roiPlane;
+
+	@Parameter(label = "<HTML>&nbsp;<br><b> III. Gaps &amp; Disconnected Components:", required = false, persist = false, visibility = ItemVisibility.MESSAGE)
+	private String HEADER3;
+
+	@Parameter(label = "Discard small components", description = "<HTML>Whether to ignore disconnected components below sub-threshold length")
 	private boolean pruneByLength;
 
-	@Parameter(label="Length threshold", description="<HTML>The minimum tree length necessary to avoid pruning.<br>" +
-			"This value is only used if \"Prune by length\" is enabled.")
+	@Parameter(label = "Length threshold", description = "<HTML>Disconnected structures below this cable length will be discarded.<br>"
+			+ "Increase this value if the algorith produces too many isolated branches.<br>Decrease it to enrich for larger, contiguos structures.<br><br>"
+			+ "This value is only used if \"Discard small components\" is enabled.")
 	private double lengthThreshold;
 
-	@Parameter(label="Connect components", description="<HTML>If the skeletonized image is fragmented into multiple components:<br>"
-			+ "Should individual components be connected?")
+	@Parameter(label = "Connect adjacent components", description = "<HTML>If the segmented image is fragmented into multiple components:<br>"
+			+ "Should the algorithm attempt to connect nearby components?")
 	private boolean connectComponents;
 
-	@Parameter(label="Max. connection distance", min = "0.0", description="<HTML>The maximum allowable distance between the " +
-			"closest pair of points for two components to be merged.<br>"
-			+ "This value is only used if \"Connect components\" is enabled")
+	@Parameter(label = "Max. connection distance", min = "0.0", description = "<HTML>The maximum allowable distance between disconnected "
+			+ "components to be merged.<br>"
+			+ "Increase this value if the algorith produces too many gaps.<br>Decrease it to minimize spurious connections.<br><br>"
+			+ "This value is only used if \"Connect adjacent components\" is enabled. Merges<br>"
+			+ "occur only between end-points and only when the operation does not introduce loops")
 	private double maxConnectDist;
 
-	@Parameter(label="Replace existing paths", description="<HTML>Whether any existing paths should be cleared " +
-			"before conversion")
-	private boolean clearExisting;
+	@Parameter(label = "<HTML>&nbsp;<br><b> IV. Options:", required = false, visibility = ItemVisibility.MESSAGE)
+	private String HEADER4;
 
-	@Override
-	protected void init() {
+	@Parameter(label = "Replace existing paths", description = "<HTML>Whether any existing paths should be discarded "
+			+ "before conversion")
+	private boolean clearExisting;
+	
+	@Parameter(label = "Apply distinct colors to paths", description = "<HTML>Whether paths should be assigned unique colors")
+	private boolean assignDistinctColors;
+
+	@Parameter(label = "Activate 'Edit Mode'", description = "<HTML>Whether SNT's 'Edit Mode' should be activated after command finishes")
+	private boolean editMode;
+
+	@Parameter(label = "Debug mode", persist = false, callback = "debuModeCallback", description = "<HTML>Enable SNT's debug mode for verbose Console logs?")
+	private boolean debugMode;
+
+	@Parameter(required = false, persist = false)
+	private boolean useFileChoosers;
+	@Parameter(required = false, persist = false)
+	private boolean simplifyPrompt;
+
+	private HashMap<String, ImagePlus> impMap;
+	private ImagePlus chosenMaskImp;
+	private boolean abortRun;
+	private boolean ensureMaskImgVisibleOnAbort;
+
+	@SuppressWarnings("unused")
+	private void init() {
 		super.init(true);
 
-		final MutableModuleItem<String> mItem = getInfo().getMutableInput("choice", String.class);
-		mItem.setWidgetStyle(ChoiceWidget.LIST_BOX_STYLE);
-		mItem.setLabel("Segmented Image");
-		mItem.setDescription("<HTML>The skeletonized image from which paths will be extracted.<br>"//
-				+ "Assumed to be binary.");
-		final List<String> choices = new ArrayList<>();
+		if (simplifyPrompt) { // adopt sensible defaults
 
-		// Populate choices with list of open images
-		final Collection<ImagePlus> impCollection = getImpInstances();
-		if (impCollection != null && !impCollection.isEmpty()) {
-			impMap = new HashMap<>(impCollection.size());
-			final ImagePlus existingImp = snt.getImagePlus();
-			for (final ImagePlus imp : impCollection) {
-				if (!imp.equals(existingImp)) {
+			resolveInput("HEADER1");
+			resolveInput("maskImgFileChoice");
+			resolveInput("originalImgFileChoice");
+			resolveInput("maskImgChoice");
+			resolveInput("originalImgChoice");
+			resolveInput("useFileChoosers");
+			resolveInput("roiPlane");
+			resolveInput("pruneByLength");
+			resolveInput("lengthThreshold");
+			resolveInput("clearExisting");
+			useFileChoosers = false;
+			maskImgChoice = IMG_TRACED_DUP_CHOICE;
+			connectComponents = true;
+			maxConnectDist = 5d; // hopefully 5 microns
+			pruneByLength = false;
+			clearExisting = false;
+			assignDistinctColors = true;
+			editMode = true;
+
+		} else if (useFileChoosers) { // disable choice widgets. Use file choosers
+
+			resolveInput("simplifyPrompt");
+			resolveInput("maskImgChoice");
+			resolveInput("originalImgChoice");
+
+		} else { // disable file choosers. Use choice widgets
+
+			resolveInput("simplifyPrompt");
+			resolveInput("maskImgFileChoice");
+			resolveInput("originalImgFileChoice");
+
+			// Populate choices with list of open images
+			final Collection<ImagePlus> impCollection = ChooseDatasetCmd.getImpInstances();
+			if (impCollection.isEmpty()) {
+				noImgError();
+				return;
+			}
+			final MutableModuleItem<String> maskImgChoiceItem = getInfo().getMutableInput("maskImgChoice",
+					String.class);
+			final MutableModuleItem<String> originalImgChoiceItem = getInfo().getMutableInput("originalImgChoice",
+					String.class);
+
+			final List<String> maskChoices = new ArrayList<>();
+			final List<String> originalChoices = new ArrayList<>();
+			impMap = new HashMap<>();
+			if (impCollection != null && !impCollection.isEmpty()) {
+				final ImagePlus existingImp = snt.getImagePlus();
+				for (final ImagePlus imp : impCollection) {
+					if (imp.equals(existingImp) || isHyperstack(imp)) continue;
 					impMap.put(imp.getTitle(), imp);
-					choices.add(imp.getTitle());
+					maskChoices.add(imp.getTitle());
+					originalChoices.add(imp.getTitle());
 				}
+				Collections.sort(maskChoices);
+				Collections.sort(originalChoices);
 			}
-			if (!impMap.isEmpty()) Collections.sort(choices);
-		}
 
-		final boolean accessToValidImageData = snt.accessToValidImageData();
-		if (accessToValidImageData) {
-			//unresolveInput("choice");
-			if (snt.getImagePlus().getProcessor().isBinary()) {
-				if (snt.getImagePlus().getStackSize() > 1) {
-					// FIXME: AnalyzeSkeleton_ does not work with wrapped Imgs in 3D??
-					choices.add(0, "Copy of data being traced");
+			if (snt.accessToValidImageData()) {
+				maskChoices.add(0, IMG_TRACED_DUP_CHOICE);
+				maskChoices.add(0, IMG_TRACED_SEC_LAYER_CHOICE);
+				originalChoices.add(0, "Image being traced");
+				if (isBinary(snt.getImagePlus())) {
+					// the active image is binary: assume it is the segmented (non-skeletonized)
+					maskImgChoice = IMG_TRACED_DUP_CHOICE;
 				} else {
-					choices.add(0, "Data being traced");
-					choices.add(1, "Copy of data being traced");
+					// the active image is grayscale: assume it is the original
+					originalImgChoice = IMG_TRACED_CHOICE;
 				}
-
-			} else {
-				choices.add(0, "Copy of data being traced");
 			}
+			if (maskChoices.isEmpty())
+				maskChoices.add(IMG_UNAVAILABLE_CHOICE);
+			originalChoices.add(0, IMG_NONE);
+			maskImgChoiceItem.setChoices(maskChoices);
+			originalImgChoiceItem.setChoices(originalChoices);
 		}
-		if (choices.isEmpty()) {
-			cancel("No Images are currently available.\n"
-					+ "Perhaps you'd like to run 'Script> Skeletons and ROIs> Reconstruction From Skeleton' instead?");
-		}
-		mItem.setChoices(choices);
+
+		debugMode = SNTUtils.isDebugMode();
+	}
+
+	@SuppressWarnings("unused")
+	private void debuModeCallback() {
+		SNTUtils.setDebugMode(debugMode);
+	}
+
+	private boolean isHyperstack(final ImagePlus imp) {
+		return imp.getNChannels() > 1 || imp.getNFrames() > 1;
+	}
+
+	private boolean isBinary(final ImagePlus imp) {
+		return imp.getProcessor().isBinary();
 	}
 
 	@Override
-	protected void resolveInputs() {
-		super.resolveInputs();
-		resolveInput("skeletonizeImage");
-		resolveInput("pruneSingletons");
-		resolveInput("clearExisting");
+	public void cancel() {
+		this.cancel("");
+	}
+
+	@Override
+	public void cancel(final String reason) {
+		super.cancel(reason);
+		snt.setCanvasLabelAllPanes(null);
+		abortRun = true;
 	}
 
 	@Override
 	public void run() {
-
-		if (choice == null) { // this should never happen
-			error("To run this command you need to first select a segmented/"
-					+ "skeletonized image from which paths can be extracted.");
+		if (abortRun || isCanceled()) {
 			return;
 		}
 
-		if (connectComponents && maxConnectDist <= 0d) {
-			error("Max. connection distance must be > 0.");
-			return;
-		}
+		ImagePlus chosenOrigImp = null;
+		boolean isValidOrigImg = true;
 
-		boolean ensureChosenImpIsVisible = false;
-		ImagePlus chosenImp;
-		if ("Copy of data being traced".equals(choice)) {
-			/* Make deep copy of imp returned by getLoadedDataAsImp() since it holds references to
-			 the same pixel arrays as used by the source data */
-			chosenImp = snt.getLoadedDataAsImp().duplicate();
-			ensureChosenImpIsVisible = chosenImp.getBitDepth() > 8 || skeletonizeImage
-					|| snt.getImagePlus().getNChannels() > 1 || snt.getImagePlus().getNFrames() > 1;
-		} else if ("Data being traced".equals(choice)) {
-			chosenImp = snt.getLoadedDataAsImp();
-		} else {
-			chosenImp = impMap.get(choice);
-		}
+		try {
 
-		if (chosenImp.getBitDepth() != 8) {
-			String msg = "The segmented/skeletonized image must be 8-bit.";
-			if (ensureChosenImpIsVisible) msg += " Please simplify " + chosenImp.getTitle() + ", and re-run";
-			error(msg);
-			return;
-		}
+			if (useFileChoosers) {
 
-		final boolean isBinary = chosenImp.getProcessor().isBinary();
-		final boolean isCompatible = isCalibrationCompatible(chosenImp);
-		if (!isBinary || !isCompatible) {
-			final StringBuilder sb = new StringBuilder("<HTML><div WIDTH=600><p>The following issue(s) were detected:</p><ul>");
-			if (!isBinary) {
-				sb.append("<li>Image is not binary: ");
-				if (skeletonizeImage) {
-					sb.append("Skeletonization will consider foreground to be any non-zero value.</li>");
+				if (!SNTUtils.fileAvailable(maskImgFileChoice)) {
+					error("File path of segmented image is invalid.");
+					return;
+				}
+				SNTUtils.log("Loading " + maskImgFileChoice.getAbsolutePath());
+				chosenMaskImp = IJ.openImage(maskImgFileChoice.getAbsolutePath());
+				ensureMaskImgVisibleOnAbort = true;
+				if (SNTUtils.fileAvailable(originalImgFileChoice)) {
+					SNTUtils.log("Loading " + originalImgFileChoice.getAbsolutePath());
+					chosenOrigImp = IJ.openImage(originalImgFileChoice.getAbsolutePath());
 				} else {
-					sb.append("Image does not seem segmented, and thus, not a skeleton.</li>");
+					isValidOrigImg = originalImgFileChoice == null || originalImgFileChoice.toString().isEmpty();
+				}
+
+			} else {
+
+				if (IMG_TRACED_DUP_CHOICE.equals(maskImgChoice)) {
+					/*
+					 * Make deep copy of imp returned by getLoadedDataAsImp() since it holds
+					 * references to the same pixel arrays as used by the source data
+					 */
+					SNTUtils.log("Duplicating loaded data");
+					chosenMaskImp = snt.getLoadedDataAsImp().duplicate();
+					if (snt.getImagePlus() != null)
+						chosenMaskImp.setRoi(snt.getImagePlus().getRoi());
+					ensureMaskImgVisibleOnAbort = true;
+
+				} else if (IMG_TRACED_SEC_LAYER_CHOICE.equals(maskImgChoice)) {
+					chosenMaskImp = snt.getSecondaryDataAsImp();
+					if (chosenMaskImp != null && snt.getImagePlus() != null)
+						chosenMaskImp.setRoi(snt.getImagePlus().getRoi());
+				} else {
+					chosenMaskImp = impMap.get(maskImgChoice);
+				}
+				if (IMG_TRACED_CHOICE.equals(originalImgChoice)) {
+					chosenOrigImp = snt.getLoadedDataAsImp();
+				} else if (impMap != null) { // e.g. when 
+					chosenOrigImp = impMap.get(originalImgChoice);
 				}
 			}
-			if (!isCompatible) {
-				sb.append("<li>Images do not share the same spatial calibration.</li>");
-			}
-			sb.append("</ul>");
-			if (!new GuiUtils().getConfirmation(sb.toString(), "Proceed Despite Warnings?")) {
-				if (ensureChosenImpIsVisible) chosenImp.show();
-				cancel();
+
+			// Abort if images remain ill-defined at this point
+			if (chosenMaskImp == null) {
+				if (IMG_TRACED_SEC_LAYER_CHOICE.equals(maskImgChoice)) {
+					final String msg1 = "No secondary layer image exists. Please load one or create it using the "
+							+ "<i>Built-in Filters</i> wizard in the <i>Auto-tracing</i> widget.";
+					final String msg2 = " retry automated tracing using <i>Utilities > Extract Paths From Segmented Image...";
+					if (snt.getStats().max == 0) {
+						final String msg3 = "<br><br>NB: Statistics for the main image have not been computed yet. You will "
+								+ "need to trace a small path over a relevant feature to compute them. This will allow "
+								+ "SNT to better understand the dynamic range of the image.";
+						error(msg1 + msg3 + "<br><br>You can always" + msg2);
+					} else if (new GuiUtils().getConfirmation(
+							msg1 + "<br>Start wizard now?<br><br> Once created, you can" + msg2, "Start Wizard?",
+							"Start Wizard", "No. Not Now")) {
+						snt.getUI().runSecondaryLayerWizard();
+						return;
+					}
+				} else {
+					noImgError();
+				}
 				return;
 			}
-			// User is sure to continue: skeletonize grayscale image
-			if (skeletonizeImage && !isBinary) {
-				SkeletonConverter.skeletonize(chosenImp);
+			if (isHyperstack(chosenMaskImp)) {
+				error("The segmented/skeletonized image is not a single channel 2D/3D image " + "Please simplify "
+						+ chosenMaskImp.getTitle()
+						+ " and rerun using <i>Utilities > Extract Paths from Segmented Image...");
+				return;
 			}
-		}
-		status("Creating Trees from Skeleton...", false);
-		final SkeletonConverter converter = new SkeletonConverter(chosenImp, skeletonizeImage && isBinary);
-		converter.setPruneByLength(pruneByLength);
-		converter.setLengthThreshold(lengthThreshold);
-		converter.setConnectComponents(connectComponents);
-		converter.setMaxConnectDist(maxConnectDist);
-		final List<Tree> trees = converter.getTrees();
-		final PathAndFillManager pafm = sntService.getPathAndFillManager();
-		if (clearExisting) {
-			final int[] indices = IntStream.rangeClosed(0, pafm.size() - 1).toArray();
-			pafm.deletePaths(indices);
-		}
-		for (final Tree tree : trees) {
-			pafm.addTree(tree);
-		}
 
-		// Extra user-friendliness: If no display canvas exist, or no image is being traced, 
-		// adopt the chosen image as tracing canvas
-		if (ensureChosenImpIsVisible) chosenImp.show();
-		if (snt.getImagePlus() == null) snt.initialize(chosenImp);
+			// Extra user-friendliness: Retrieve ROI. If not found, look for it on second
+			// image
+			Roi roi = chosenMaskImp.getRoi();
+			if (roi == null && chosenOrigImp != null)
+				roi = chosenOrigImp.getRoi();
 
-		resetUI();
-		status("Successfully created " + trees.size() + " Tree(s)...", true);
+			// Extra user-friendliness: Aggregate unexpected settings in a single list
+			final boolean isSame = (useFileChoosers) ? (maskImgFileChoice == originalImgFileChoice) : (maskImgChoice == originalImgChoice);
+			final boolean isBinary = chosenMaskImp.getProcessor().isBinary();
+			final boolean isCompatible = chosenOrigImp == null
+					|| chosenMaskImp.getCalibration().equals(chosenOrigImp.getCalibration());
+			final boolean isSameDim = chosenOrigImp == null || (chosenMaskImp.getWidth() == chosenOrigImp.getWidth()
+					&& chosenMaskImp.getHeight() == chosenOrigImp.getHeight()
+					&& chosenMaskImp.getNSlices() == chosenOrigImp.getNSlices());
+			final boolean isValidRoi = roi != null && roi.isArea();
+			final boolean isValidConnectDist = maxConnectDist > 0d;
+			if (isSame || !isValidOrigImg || !isBinary || !isSameDim || !isCompatible || (!isValidRoi && inferRootFromRoi)
+					|| (!isValidConnectDist && connectComponents)) {
+				final int width = GuiUtils
+						.renderedWidth("      Warning: Images do not share the same spatial calibration<");
+				final StringBuilder sb = new StringBuilder("<HTML><div WIDTH=").append(Math.max(550, width))
+						.append("><p>The following issue(s) were detected:</p><ul>");
+				if (isSame) {
+					sb.append("<li>Warning: Choices for segmented and original image point to the same image</li>");
+				}
+				if (!isValidOrigImg) {
+					sb.append("<li>Warning: Original image is not valid and will be ignored</li>");
+				}
+				if (!isSameDim) {
+					sb.append("<li>Warning: Images do not share the same dimensions. Algorithm will likely fail</li>");
+					ensureMaskImgVisibleOnAbort = true;
+				}
+				if (!isBinary) {
+					sb.append(
+							"<li>Info: Image is not thresholded: Non-zero intensities will be used as foreground</li>");
+					ensureMaskImgVisibleOnAbort = true;
+				}
+				if (!isCompatible) {
+					sb.append("<li>Warning: Images do not share the same spatial calibration</li>.");
+					ensureMaskImgVisibleOnAbort = true;
+				}
+				if (!isValidRoi && inferRootFromRoi) {
+					sb.append(
+							"<li>Warning: Image does not contain an active area ROI. Root detection will be disabled</li>");
+				}
+				if (!isValidConnectDist && connectComponents) {
+					sb.append(
+							"<li>Warning: Max. connection distance must be > 0. Connection of components will be disabled</li>");
+				}
+				sb.append("</ul>");
+				sb.append("<p>Would you like to proceed? If you abort, ");
+				if (ensureMaskImgVisibleOnAbort) {
+					sb.append(" segmented image will be displayed so that you can edit it accordingly. You can then rerun");
+				} else {
+					sb.append(" you can rerun later on");
+				}
+				sb.append(" using <i>Utilities > Extract Paths From Segmented Image...</i>");
+				sb.append("</p>");
+				if (!new GuiUtils().getConfirmation(sb.toString(), "Proceed Despite Warnings?",
+						"Proceed. I'm Feeling Lucky", "Abort")) {
+					if (ensureMaskImgVisibleOnAbort && !useFileChoosers)
+						chosenMaskImp.show();
+					resetUI(false, SNTUI.SNT_PAUSED); // waive img to IJ for easier drawing of ROIS, etc.
+					cancel();
+					return;
+				}
+				// User is sure to continue: skeletonize grayscale image
+				connectComponents = connectComponents && isValidConnectDist;
+				inferRootFromRoi = inferRootFromRoi && isValidRoi;
+			}
 
+			SNTUtils.log("Segmented image: " + chosenMaskImp.getTitle());
+			SNTUtils.log("Segmented image thresholded/binarized: "
+					+ (isBinary(chosenMaskImp) || chosenMaskImp.isThreshold()));
+			SNTUtils.log("Original image: " + ((chosenOrigImp == null) ? null : chosenOrigImp.getTitle()));
+
+			// We'll skeletonize all images again, just to ensure we are indeed dealing with
+			// skeletons
+			snt.setCanvasLabelAllPanes("Skeletonizing..");
+			SkeletonConverter.skeletonize(chosenMaskImp, chosenMaskImp.getNSlices() == 1);
+
+			// Now we can finally run the conversion!
+			snt.setCanvasLabelAllPanes("Autotracer running...");
+			status("Creating Trees from Skeleton...", false);
+			final SkeletonConverter converter = new SkeletonConverter(chosenMaskImp, false);
+			SNTUtils.log("Converting....");
+			converter.setPruneByLength(pruneByLength);
+			SNTUtils.log("Prune by length: " + pruneByLength);
+			converter.setLengthThreshold(lengthThreshold);
+			SNTUtils.log("Length threshold: " + lengthThreshold);
+			converter.setConnectComponents(connectComponents);
+			SNTUtils.log("Connect components: " + connectComponents);
+			converter.setMaxConnectDist(maxConnectDist);
+			SNTUtils.log("MaxC onnecting Dist.: " + maxConnectDist);
+			if (chosenOrigImp == null) { // intensityPrunning off
+				converter.setPruneMode(SkeletonConverter.SHORTEST_BRANCH);
+				SNTUtils.log("Pruning mode: Shortest branch (loop branches to be cut at middle point)");
+			} else { // intensityPrunning on
+				converter.setOrigIP(chosenOrigImp);
+				converter.setPruneMode(SkeletonConverter.LOWEST_INTENSITY_BRANCH);
+				SNTUtils.log("Pruning mode: Dimmest branch (dimmest branch among loop branches to be cut at its darkest voxel)");
+			}
+			List<Tree> trees;
+			try {
+				trees = (inferRootFromRoi && isValidRoi) ? converter.getTrees(roi, roiPlane) : converter.getTrees();
+			} catch (final ClassCastException ignored) {
+				if (chosenOrigImp != null)
+					SNTUtils.log("Intensity-based pruning failed (unsupported image type!?): Defaulting to length-based prunning");
+				converter.setPruneMode(SkeletonConverter.SHORTEST_BRANCH);
+				trees = (inferRootFromRoi && isValidRoi) ? converter.getTrees(roi, roiPlane) : converter.getTrees();
+			} 
+			SNTUtils.log("... Done. " + trees.size() + " tree(s) retrieved.");
+			if (trees.isEmpty()) {
+				error("No paths could be extracted. Chosen parameters were not suitable!?");
+				return;
+			}
+			Tree.assignUniqueColors(trees);
+			final PathAndFillManager pafm = sntService.getPathAndFillManager();
+			if (clearExisting) {
+				pafm.clear();
+			}
+			if (assignDistinctColors) {
+				trees.forEach( tree -> {
+					final ColorRGB[] colors = SNTColor.getDistinctColors(tree.size());
+					int idx = 0;
+					for (final Path p : tree.list())
+						p.setColor(colors[idx++]);
+				});
+			}
+			trees.forEach(tree -> pafm.addTree(tree, "Autotraced"));
+
+			// Extra user-friendliness: If no display canvas exist, no image is being
+			// traced, or we are importing from a file path, adopt the chosen image as
+			// tracing canvas
+			if (snt.getImagePlus() == null || useFileChoosers) {
+				// Suppress the 'auto-tracing' prompt for this image. This
+				// will be reset once SNT initializes with the new data
+				snt.getPrefs().setTemp("autotracing-prompt-armed", false);
+				snt.initialize(chosenMaskImp);
+			}
+
+			if (editMode && ui != null && pafm.size() > 0) {
+				if (!trees.get(0).isEmpty())
+					ui.getPathManager().setSelectedPaths(Collections.singleton(trees.get(0).get(0)), this);
+				ui.setVisibilityFilter("all", false);
+				resetUI(false, SNTUI.EDITING);
+			} else {
+				resetUI(false,  SNTUI.READY);
+			}
+			status("Successfully created " + trees.size() + " Tree(s)...", true);
+			if (chosenOrigImp != null && converter.getPruneMode() == SkeletonConverter.SHORTEST_BRANCH) {
+				error("Intensity-based resolution of loops could not be used. 'Shortest branch' prunning was used instead.<br>"
+						+ chosenOrigImp.getTitle() + " (" + chosenOrigImp.getBitDepth()
+						+ " -bit) may be of an unsupported type. ");
+			}
+		} catch (final Exception | Error ex) {
+			ex.printStackTrace();
+			error("An exception occured. See Console for details.");
+		}
+	}
+
+	@Override
+	protected void error(final String msg) {
+		super.error(msg);
+		abortRun = true; // should not be needed but isCanceled() is not working as expected!?
+		resolveAllInputs();
+		if (ensureMaskImgVisibleOnAbort && chosenMaskImp != null) {
+			chosenMaskImp.show();
+		}
+	}
+
+	private void noImgError() {
+		error("To run this command you must first open a pre-processed image from which paths can be extracted (i.e., "
+				+ "in which background pixels have been removed). E.g.:"
+				+ "<ul><li>A segmented (thresholded) image (8-bit)</li>"
+				+ "<li>A filtered image, as created by <i>Built-in Filters</i> in the <i>Auto-tracing</i> widget</li>"
+				+ "</ul>" + "<p>" + "<p>Related Scripts:</p>" + "<ul>" + "<li>Batch &rarr Filter Multiple Images</li>"
+				+ "<li>Skeletons and ROIs &rarr Reconstruction From Segmented Image</li>" + "</ul>" + "<p>To Rerun:</p>"
+				+ "<ul>" + "<li>Utilities &rarr Extract Paths from Seg. Image... (opened images)</li>"
+				+ "<li>File &rarr AutoTrace Segmented Image... (unopened files)</li>");
+	}
+
+	private void resolveAllInputs() { // ensures prompt is not displayed on error
+		resolveInput("msg1");
+		resolveInput("HEADER1");
+		resolveInput("maskImgChoice");
+		resolveInput("maskImgFileChoice");
+		resolveInput("originalImgChoice");
+		resolveInput("originalImgFileChoice");
+		resolveInput("HEADER2");
+		resolveInput("inferRootFromRoi");
+		resolveInput("roiPlane");
+		resolveInput("HEADER3");
+		resolveInput("connectComponents");
+		resolveInput("maxConnectDist");
+		resolveInput("pruneByLength");
+		resolveInput("lengthThreshold");
+		resolveInput("HEADER4");
+		resolveInput("clearExisting");
+		resolveInput("assignDistinctColors");
+		resolveInput("editMode");
+		resolveInput("useFileChoosers");
+		resolveInput("simplifyPrompt");
+		
+	}
+
+	/* IDE debug method **/
+	public static void main(final String[] args) {
+		final ImageJ ij = new ImageJ();
+		ij.ui().showUI();
+		ij.get(SNTService.class).initialize(true);
+		final Map<String, Object> input = new HashMap<>();
+		input.put("useFileChoosers", false);
+		ij.command().run(SkeletonConverterCmd.class, true, input);
 	}
 }

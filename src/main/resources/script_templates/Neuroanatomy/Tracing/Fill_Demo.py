@@ -6,10 +6,11 @@
 #@ SNTService snt
 
 """
-file: Fill_Demo.py
+file:    Fill_Demo.py
 version: 20211012
-author: Cameron Arshadi
-info: Demonstrates how to fill programatically
+author:  Cameron Arshadi
+info:    Demonstrates how to fill programatically. More details at
+         https://forum.image.sc/t/batch-filling-in-snt/58733/7
 """
 
 from ij import IJ, ImagePlus
@@ -24,8 +25,8 @@ from sc.fiji.snt.tracing import FillerThread
 from sc.fiji.snt.tracing.cost import Reciprocal
 from sc.fiji.snt.util import ImgUtils
 
-# Documentation Resources: https://imagej.net/SNT:_Scripting
-# Latest SNT API: https://morphonets.github.io/SNT/
+# Documentation Resources: https://imagej.net/plugins/snt/scripting
+# Latest SNT API: https://javadoc.scijava.org/SNT/
 
 
 def copyAxes(dataset, out_dataset):

@@ -2,7 +2,7 @@
  * #%L
  * Fiji distribution of ImageJ for the life sciences.
  * %%
- * Copyright (C) 2010 - 2021 Fiji developers.
+ * Copyright (C) 2010 - 2022 Fiji developers.
  * %%
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as
@@ -151,7 +151,7 @@ public class RemoteSWCImporterCmd extends CommonDynamicCmd {
 			.isEmpty()).collect(Collectors.toList());
 		if (filteredResult.isEmpty()) {
 			resetUI(recViewer == null);
-			notifyLoadingEnd(recViewer);
+			resetProgress(recViewer);
 			error("No reconstructions could be retrieved. Invalid ID(s)?");
 			status("Error... No reconstructions imported", true);
 			return;
@@ -181,7 +181,7 @@ public class RemoteSWCImporterCmd extends CommonDynamicCmd {
 
 		final boolean validateImgDimensions = !standAloneViewer && pafm.size() > lastExistingPathIdx;
 		resetUI(validateImgDimensions);
-		notifyLoadingEnd(recViewer);
+		resetProgress(recViewer);
 
 		if (filteredResult.size() < rawResult.size()) {
 			SNTUtils.log("Import failed for the following queried morphologies:");

@@ -2,7 +2,7 @@
  * #%L
  * Fiji distribution of ImageJ for the life sciences.
  * %%
- * Copyright (C) 2010 - 2021 Fiji developers.
+ * Copyright (C) 2010 - 2022 Fiji developers.
  * %%
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as
@@ -22,6 +22,7 @@
 
 package sc.fiji.snt.gui.cmds;
 
+
 import javax.swing.JOptionPane;
 
 import org.scijava.command.Command;
@@ -37,6 +38,7 @@ import sc.fiji.snt.SNTPrefs;
 import sc.fiji.snt.SNTService;
 import sc.fiji.snt.analysis.PathProfiler;
 import sc.fiji.snt.gui.GuiUtils;
+import sc.fiji.snt.gui.MeasureUI;
 import sc.fiji.snt.gui.SaveMeasurementsCmd;
 import sc.fiji.snt.plugin.AnalyzerCmd;
 import sc.fiji.snt.plugin.BrainAnnotationCmd;
@@ -77,10 +79,13 @@ public class PrefsCmd extends ContextCommand {
 	@Parameter
 	protected SNTService sntService;
 
-	@Parameter(label = "Look and feel", required = false, description = "How should SNT tools look? (Restart may be required)", choices = {
-			GuiUtils.LAF_DEFAULT, GuiUtils.LAF_LIGHT, GuiUtils.LAF_LIGHT_INTJ, GuiUtils.LAF_DARK,
-			GuiUtils.LAF_DARCULA })
+	@Parameter(label = "Look and feel (L&F)", required = false, persist = false,
+			description = "How should SNT look? NB: This may also affect other Swing-based dialogs in Fiji.", choices = {
+			GuiUtils.LAF_DEFAULT, GuiUtils.LAF_LIGHT, GuiUtils.LAF_LIGHT_INTJ, GuiUtils.LAF_DARK, GuiUtils.LAF_DARCULA })
 	private String laf;
+
+	@Parameter(label="Managing Themes...", callback="lafHelp")
+	private Button lafHelpButton;
 
 	@Parameter(label="Remember window locations", description="Whether position of dialogs should be preserved across restarts")
 	private boolean persistentWinLoc;
@@ -97,7 +102,7 @@ public class PrefsCmd extends ContextCommand {
 	private int nThreads;
 
 	@Parameter(label="Reset All Preferences...", callback="reset")
-	private Button reset;
+	private Button resetButton;
 
 	private SNT snt;
 
@@ -114,9 +119,8 @@ public class PrefsCmd extends ContextCommand {
 		final String existingLaf = SNTPrefs.getLookAndFeel();
 		SNTPrefs.setLookAndFeel(laf);
 		if (!existingLaf.equals(laf) && snt.getUI() != null) {
-			// This causes all sort of inconsistencies. Give some heads-up
-			final int ans = new GuiUtils(snt.getUI()).yesNoDialog("It is <i>highly</i> recommended that you restart SNT for changes to take effect. "
-							+ "Alternatively, you can attempt to apply the new Look and Feel now, but SNT widgets may display erratically. "
+			final int ans = new GuiUtils(snt.getUI()).yesNoDialog("It is recommended that you restart SNT for changes to take effect. "
+							+ "Alternatively, you can attempt to apply the new Look and Feel now, but some widgets/icons may not display properly. "
 							+ "Do you want to try nevertheless?", "Restart Suggested", "Yes. Apply now.", "No. I will restart.");
 			if (ans == JOptionPane.YES_OPTION)
 				snt.getUI().setLookAndFeel(laf);
@@ -130,7 +134,7 @@ public class PrefsCmd extends ContextCommand {
 			force2DDisplayCanvas = snt.getPrefs().is2DDisplayCanvas();
 			compressTraces = snt.getPrefs().isSaveCompressedTraces();
 			nThreads = SNTPrefs.getThreads();
-			laf = SNTPrefs.getLookAndFeel();
+			laf = GuiUtils.LAF_DEFAULT;
 		} catch (final NullPointerException npe) {
 			cancel("SNT is not running.");
 		}
@@ -148,7 +152,20 @@ public class PrefsCmd extends ContextCommand {
 		}
 	}
 
+	@SuppressWarnings("unused")
+	private void lafHelp() {
+		laf = GuiUtils.LAF_DEFAULT;
+		new GuiUtils().showHTMLDialog("<HTML>"
+				+ "This option is now outdated. SNT's <i>Look and Feel</i> (L&F) preference has been integrated into Fiji. "
+				+ "Please set SNT's L&F to 'Default' and use Fiji's <i>Edit>Look and Feel...</i> prompt instead.<br><br>"
+				+ "Note that setting a L&F does not affect AWT widgets. Thus, while a dark theme can be applied "
+				+ "to SNT (and other Fiji components like the Script Editor), it is currently not possible to "
+				+ "apply a dark theme to ImageJ's built-in dialogs, macro prompts, and dialogs of certain legacy plugins.",
+				"Managing Themes", true);
+	}
+
 	/** Clears all of SNT preferences. */
+	@SuppressWarnings("deprecation")
 	public void clearAll() {
 
 		prefService.clear(AddTextAnnotationCmd.class);
@@ -175,9 +192,11 @@ public class PrefsCmd extends ContextCommand {
 		prefService.clear(LoadObjCmd.class);
 		prefService.clear(LoadReconstructionCmd.class);
 		prefService.clear(LocalThicknessCmd.class);
+		prefService.clear(MeasureUI.class);
 		prefService.clear(MLImporterCmd.class);
 		prefService.clear(MultiSWCImporterCmd.class);
 		prefService.clear(MultiTreeMapperCmd.class);
+		prefService.clear(NDFImporterCmd.class);
 		prefService.clear(OpenDatasetCmd.class);
 		prefService.clear(PathAnalyzerCmd.class);
 		prefService.clear(PathFitterCmd.class);
