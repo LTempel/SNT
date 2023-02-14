@@ -36,14 +36,14 @@ class ControllerTracing(val sciViewSNT: SciViewSNT) {
             }
         }
         val scene = sciViewSNT.sciView.camera?.getScene()?:throw IllegalStateException("No scene found.")
-        val pen = Box(Vector3f())
+        val pen = Box(Vector3f(0.05f, 0.2f, 0.05f))
         pen.spatial{
-            position = Vector3f()
+            position = Vector3f(-0.5f, 1.0f, 0f)
         }
         scene.addChild(pen)
-        val tip = Box(Vector3f())
-        tip.spatial{
-            position = Vector3f()
+        val tip = Box(Vector3f(0.025f, 0.025f, 0.025f))
+        tip.spatial {
+            position = Vector3f(0f, 0.08f, 0f)
         }
         pen.addChild(tip)
         var lastPenWriting = 0L
