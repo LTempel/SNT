@@ -173,14 +173,13 @@ public class SciViewSNT {
 			this.sciView.getFloor().setVisible(false);
 			if (snt != null) syncPathManagerList();
 
-			final ControllerTracing CT = new ControllerTracing(this);
-
-
 		}
 	}
 
 
 	private void setupControllerTracing(OpenVRHMD hmd) {
+
+		final ControllerTracing CT = new ControllerTracing(this);
 
 	}
 
@@ -515,6 +514,7 @@ public class SciViewSNT {
 		final SciViewSNT sciViewSNT = sntService.getOrCreateSciViewSNT();
 
 		sciViewSNT.sciView.waitForSceneInitialisation();
+		sciViewSNT.setupControllerTracing(new OpenVRHMD());
 
 		final Tree tree = sntService.demoTree("fractal");
 		tree.setColor(Colors.RED);

@@ -35,9 +35,9 @@ class ControllerTracing(val sciViewSNT: SciViewSNT) {
                 }
             }
         }
-        val scene = sciViewSNT.sciView.camera?.getScene()?:throw IllegalStateException("No scene found.")
+        val scene = sciViewSNT.sciView.camera?.getScene() ?: throw IllegalStateException("No scene found.")
         val pen = Box(Vector3f(0.05f, 0.2f, 0.05f))
-        pen.spatial{
+        pen.spatial {
             position = Vector3f(-0.5f, 1.0f, 0f)
         }
         scene.addChild(pen)
@@ -49,13 +49,22 @@ class ControllerTracing(val sciViewSNT: SciViewSNT) {
         var lastPenWriting = 0L
         pen.addAttribute(Grabable::class.java, Grabable())
         pen.addAttribute(Pressable::class.java, Pressable(onHold = {
-            if (System.currentTimeMillis() - lastPenWriting > 50){
+            if (System.currentTimeMillis() - lastPenWriting > 50) {
                 val ink = Sphere()
-                ink.spatial().position=tip.spatial().worldPosition()
+                ink.spatial().position = tip.spatial().worldPosition()
                 scene.addChild(ink)
                 lastPenWriting = System.currentTimeMillis()
             }
         }))
     }
+
+    companion object {
+        @JvmStatic
+        fun main(args: Array<String>) {
+            ControllerTracing().main()
+        }
+    }
 }
+
+
 
