@@ -178,7 +178,7 @@ public class SciViewSNT {
 
 
 	private void setupControllerTracing() {
-		snt.
+
 		final ControllerTracing CT = new ControllerTracing(this);
 
 	}

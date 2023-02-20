@@ -52,8 +52,8 @@ class ControllerTracing(val sciViewSNT: SciViewSNT) {
             if (System.currentTimeMillis() - lastPenWriting > 50) {
                 val ink = Sphere()
                 ink.spatial().position = tip.spatial().worldPosition()
-                sciViewSNT.
-                scene.addChild(ink)
+                //sciViewSNT.
+                //scene.addChild(ink)
                 lastPenWriting = System.currentTimeMillis()
             }
         }))
