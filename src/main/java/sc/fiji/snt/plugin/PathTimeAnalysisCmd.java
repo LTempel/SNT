@@ -2,7 +2,7 @@
  * #%L
  * Fiji distribution of ImageJ for the life sciences.
  * %%
- * Copyright (C) 2010 - 2022 Fiji developers.
+ * Copyright (C) 2010 - 2023 Fiji developers.
  * %%
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as
@@ -64,7 +64,7 @@ import sc.fiji.snt.util.SNTColor;
  *
  * @author Tiago Ferreira
  */
-@Plugin(type = Command.class, visible = false, label = "Time Profile Analysis...", initializer = "init")
+@Plugin(type = Command.class, label = "Time Profile Analysis...", initializer = "init")
 public class PathTimeAnalysisCmd extends CommonDynamicCmd {
 
 	private static final String TAG_REGEX_PATTERN = "("+ PathMatcherCmd.TAG_REGEX_PATTERN + ")";
@@ -115,11 +115,7 @@ public class PathTimeAnalysisCmd extends CommonDynamicCmd {
 	private Map<Integer, List<Path>> getPathListMap() {
 		final TreeMap<Integer, List<Path>> map = new TreeMap<>();
 		for (final Path p : paths) {
-			List<Path> list = map.get(p.getFrame());
-			if (list == null) {
-				list = new ArrayList<>();
-				map.put(p.getFrame(), list);
-			}
+			List<Path> list = map.computeIfAbsent(p.getFrame(), k -> new ArrayList<>());
 			list.add(p);
 		}
 		return map;
@@ -271,7 +267,7 @@ public class PathTimeAnalysisCmd extends CommonDynamicCmd {
 	}
 
 	//https://stackoverflow.com/a/58249974
-	private class NumberAwareComparator implements Comparator<String>
+	private static class NumberAwareComparator implements Comparator<String>
 	{
 		@Override
 		public int compare(final String s1, final String s2) {

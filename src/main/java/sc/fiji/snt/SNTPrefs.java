@@ -2,7 +2,7 @@
  * #%L
  * Fiji distribution of ImageJ for the life sciences.
  * %%
- * Copyright (C) 2010 - 2022 Fiji developers.
+ * Copyright (C) 2010 - 2023 Fiji developers.
  * %%
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as
@@ -29,6 +29,8 @@ import java.util.HashSet;
 import javax.swing.LookAndFeel;
 import javax.swing.UIManager;
 
+import org.scijava.util.VersionUtils;
+
 import com.formdev.flatlaf.FlatLaf;
 
 import ij.Prefs;
@@ -48,7 +50,7 @@ public class SNTPrefs { // TODO: Adopt PrefService
 	public static final String NO_IMAGE_ASSOCIATED_DATA = "noImgData";
 	public static final String RESIZE_REQUIRED = "resizeNeeded";
 	public static final String RESTORE_LOADED_IMGS = "restoreLoadedImgs";
-
+	public static final String AUTOSAVE_KEY = "tracespath";
 	private static final int DRAW_DIAMETERS = 1;
 	private static final int SNAP_CURSOR = 2;
 	private static final int REQUIRE_SHIFT_FOR_FORK = 4;
@@ -72,6 +74,7 @@ public class SNTPrefs { // TODO: Adopt PrefService
 	private static final String PATHWIN_LOC = "tracing.snt.pwloc";
 	private static final String FILLWIN_LOC = "tracing.snt.fwloc";
 	private static final String FILTERED_IMG_PATH = "tracing.snt.fipath";
+	private static final String VERSION_CHECK = "tracing.snt.version";
 
 	@Deprecated
 	private static final String LOAD_DIRECTORY_KEY = "tracing.snt.lastdir";
@@ -79,7 +82,7 @@ public class SNTPrefs { // TODO: Adopt PrefService
 	private static File recentDir;
 
 	private final SNT snt;
-	private final int UNSET_PREFS = -1;
+	private static final int UNSET_PREFS = -1;
 	private int currentBooleans;
 	private boolean ij1ReverseSliderOrder;
 	private boolean ij1PointerCursor;
@@ -92,7 +95,6 @@ public class SNTPrefs { // TODO: Adopt PrefService
 		storeIJ1Prefs();
 		imposeIJ1Prefs();
 		wipeSessionPrefs();
-		SNTChart.setDefaultFontScale(Prefs.getGuiScale());
 	}
 
 	protected int get3DViewerResamplingFactor() {
@@ -280,6 +282,12 @@ public class SNTPrefs { // TODO: Adopt PrefService
 		setPref(STORE_WIN_LOCATIONS, value);
 	}
 
+	public static boolean firstRunAfterUpdate() {
+		final String lastVersion = Prefs.get(VERSION_CHECK, null);
+		Prefs.set(VERSION_CHECK, SNTUtils.VERSION);
+		return lastVersion == null || VersionUtils.compare(SNTUtils.VERSION, lastVersion) > 0;
+	}
+
 	public static void setThreads(int n) {
 		Prefs.setThreads((n < 1) ? Runtime.getRuntime().availableProcessors() : n);
 	}
@@ -326,6 +334,7 @@ public class SNTPrefs { // TODO: Adopt PrefService
 		setLookAndFeel(null);
 		setThreads(0);
 		wipeSessionPrefs();
+		Prefs.set(VERSION_CHECK, SNTUtils.VERSION);
 		Prefs.savePreferences();
 	}
 
@@ -356,8 +365,26 @@ public class SNTPrefs { // TODO: Adopt PrefService
 					// ignored;
 				}
 		}
-		if (recentDir == null)
+		return lastknownDir();
+	}
+
+	public static File lastknownDir() {
+		if (recentDir == null) {
+			try {
+				recentDir = new File(ij.io.OpenDialog.getDefaultDirectory());
+			} catch (final Exception ignored) {
+				// do nothing
+			}
+		}
+		if (recentDir == null) {
 			recentDir = new File(System.getProperty("user.home"));
+		}
 		return recentDir;
+	}
+
+	public static void setLastknownDir(final File file) {
+		if (file != null) {
+			recentDir = (file.isDirectory()) ? file : file.getParentFile();
+		}
 	}
 }

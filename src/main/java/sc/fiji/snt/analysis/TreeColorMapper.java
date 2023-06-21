@@ -2,7 +2,7 @@
  * #%L
  * Fiji distribution of ImageJ for the life sciences.
  * %%
- * Copyright (C) 2010 - 2022 Fiji developers.
+ * Copyright (C) 2010 - 2023 Fiji developers.
  * %%
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as
@@ -54,6 +54,7 @@ import sc.fiji.snt.SNTService;
 import sc.fiji.snt.SNTUtils;
 import sc.fiji.snt.Tree;
 import sc.fiji.snt.util.PointInImage;
+import sc.fiji.snt.util.SNTColor;
 import sc.fiji.snt.util.SWCPoint;
 import sc.fiji.snt.util.ShollPoint;
 import sc.fiji.snt.viewer.MultiViewer2D;
@@ -69,6 +70,8 @@ public class TreeColorMapper extends ColorMapper {
 
 	/* For convenience keep references to TreeAnalyzer fields */
 
+	/** Flag for {@value #INTER_NODE_DISTANCE} statistics. */
+	public static final String INTER_NODE_DISTANCE = MultiTreeStatistics.INTER_NODE_DISTANCE;
 	/** Flag for {@value #SHOLL_COUNTS} mapping. */
 	public static final String SHOLL_COUNTS = "Sholl inters. (root centered)"; //FIXME: getNormalizedMeasurement() will not allow '-'
 	/** Flag for {@value #STRAHLER_NUMBER} mapping. */
@@ -117,6 +120,7 @@ public class TreeColorMapper extends ColorMapper {
 			NODE_RADIUS, //
 			PATH_DISTANCE, //
 			SHOLL_COUNTS, //
+			INTER_NODE_DISTANCE, //
 			X_COORDINATES, //
 			Y_COORDINATES, //
 			Z_COORDINATES, //
@@ -190,7 +194,7 @@ public class TreeColorMapper extends ColorMapper {
 			case STRAHLER_NUMBER:
 				assignStrahlerOrderToNodeValues();
 				integerScale = true;
-				mapToNodeProperty(VALUES, colorTable);
+				mapToNodeProperty(VALUES);
 				break;
 			case SHOLL_COUNTS:
 				final Tree tree = new Tree(paths);
@@ -226,14 +230,15 @@ public class TreeColorMapper extends ColorMapper {
 			case INTERNAL_COUNTER:
 			case TAG_FILENAME:
 			case PATH_FRAME:
-				mapToPathProperty(cMeasurement, colorTable);
+				mapToPathProperty(cMeasurement);
 				break;
 			case X_COORDINATES:
 			case Y_COORDINATES:
 			case Z_COORDINATES:
 			case NODE_RADIUS:
 			case VALUES:
-				mapToNodeProperty(cMeasurement, colorTable);
+			case INTER_NODE_DISTANCE:
+				mapToNodeProperty(cMeasurement);
 				break;
 			default:
 				throw new IllegalArgumentException("Unknown parameter");
@@ -259,8 +264,7 @@ public class TreeColorMapper extends ColorMapper {
 		});
 	}
 
-	private void mapToPathProperty(final String measurement,
-		final ColorTable colorTable)
+	private void mapToPathProperty(final String measurement)
 	{
 		final List<MappedPath> mappedPaths = new ArrayList<>();
 		switch (measurement) {
@@ -334,8 +338,7 @@ public class TreeColorMapper extends ColorMapper {
 		nodeMapping = false;
 	}
 
-	private void mapToNodeProperty(final String measurement,
-		final ColorTable colorTable)
+	private void mapToNodeProperty(final String measurement)
 	{
 		if (Double.isNaN(min) || Double.isNaN(max) || min > max) {
 			final TreeStatistics tStats = new TreeStatistics(new Tree(paths));
@@ -361,6 +364,12 @@ public class TreeColorMapper extends ColorMapper {
 						break;
 					case VALUES:
 						value = p.getNodeValue(node);
+						break;
+					case INTER_NODE_DISTANCE:
+						if (node == 0)
+							value = Double.NaN;
+						else
+							value = p.getNode(node).distanceTo(p.getNode(node-1));
 						break;
 					default:
 						throw new IllegalArgumentException("Unknow parameter");
@@ -477,6 +486,11 @@ public class TreeColorMapper extends ColorMapper {
 				}
 			}
 		}
+		// second pass: Resolve remaining non-mapped nodes
+		// https://github.com/morphonets/SNT/issues/176
+		for (final Path p : tree.list()) {
+			SNTColor.interpolateNullEntries(p.getNodeColors());
+		}
 		mappedTrees.add(tree);
 		nodeMapping = true;
 	}
@@ -544,6 +558,9 @@ public class TreeColorMapper extends ColorMapper {
 
 	protected String tryReallyHardToGuessMetric(final String guess) {
 		final String normGuess = guess.toLowerCase();
+		if (normGuess.indexOf("inter") != -1 && normGuess.indexOf("node") != -1) {
+			return INTER_NODE_DISTANCE;
+		}
 		if (normGuess.indexOf("soma") != -1 || normGuess.indexOf("path d") != -1) {
 			return PATH_DISTANCE;
 		}
@@ -693,7 +710,7 @@ public class TreeColorMapper extends ColorMapper {
 		}
 	}
 
-	private class MappedTaggedPath {
+	private static class MappedTaggedPath {
 
 		private final Pattern pattern = Pattern.compile("\\{(\\w+)\\b");
 		private final Path path;

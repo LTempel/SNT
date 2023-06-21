@@ -2,7 +2,7 @@
  * #%L
  * Fiji distribution of ImageJ for the life sciences.
  * %%
- * Copyright (C) 2010 - 2022 Fiji developers.
+ * Copyright (C) 2010 - 2023 Fiji developers.
  * %%
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as
@@ -30,7 +30,6 @@ import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
-import java.net.URL;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -49,6 +48,7 @@ import org.scijava.service.Service;
 import org.scijava.util.ColorRGB;
 import org.scijava.util.FileUtils;
 
+import ij.CompositeImage;
 import ij.IJ;
 import ij.ImagePlus;
 import ij.gui.NewImage;
@@ -62,6 +62,7 @@ import sc.fiji.snt.analysis.TreeAnalyzer;
 import sc.fiji.snt.analysis.TreeStatistics;
 import sc.fiji.snt.analysis.graph.DirectedWeightedGraph;
 import sc.fiji.snt.event.SNTEvent;
+import sc.fiji.snt.gui.GuiUtils;
 import sc.fiji.snt.hyperpanes.MultiDThreePanes;
 import sc.fiji.snt.io.MouseLightLoader;
 import sc.fiji.snt.util.SWCPoint;
@@ -208,19 +209,7 @@ public class SNTService extends AbstractService implements ImageJService {
 	 */
 	public void loadTracings(String filePathOrURL) throws UnsupportedOperationException, IOException {
 		accessActiveInstance(false);
-		final String lowerCaseFilePathOrURL = filePathOrURL.toLowerCase();
-		if (lowerCaseFilePathOrURL.contains("demo")) {
-			if (lowerCaseFilePathOrURL.contains("op"))
-				filePathOrURL = "https://raw.githubusercontent.com/morphonets/SNT/0b3451b8e62464a270c9aab372b4f651c4cf9af7/src/test/resources/OP_1-gs.swc";
-			else if (lowerCaseFilePathOrURL.contains("timelapse")) 
-				filePathOrURL = "https://raw.githubusercontent.com/morphonets/SNTmanuscript/9b4b933a742244505f0544c29211e596c85a5da7/Fig01/traces/701.traces";
-		}
-		if (filePathOrURL.startsWith("http") || filePathOrURL.indexOf("://") > 0) {
-			final String fileName = filePathOrURL.substring(filePathOrURL.lastIndexOf('/') + 1);
-			final String fileNameWithoutExtn = fileName.substring(0, fileName.lastIndexOf('.'));
-			plugin.getPathAndFillManager().loadGuessingType(fileNameWithoutExtn, new URL(filePathOrURL).openStream());
-		} else
-			plugin.loadTracings(new File(filePathOrURL));
+		plugin.getPathAndFillManager().loadGuessingType(filePathOrURL);
 	}
 
 	/**
@@ -262,7 +251,7 @@ public class SNTService extends AbstractService implements ImageJService {
 			return false;
 		File saveFile;
 		if (filePath == null || filePath.trim().isEmpty() && getUI() != null) {
-			saveFile = getUI().saveFile("Save As Traces...", null, ".traces");
+			saveFile = getUI().saveFile("Save As Traces...", null, "traces");
 		} else {
 			saveFile = new File(filePath);
 		}
@@ -529,14 +518,14 @@ public class SNTService extends AbstractService implements ImageJService {
 			return getResourceSWCTree("TreeV", "tests/TreeV.swc");
 		else if (nTree.contains("op") || nTree.contains("olfactory projection") || nTree.contains("diadem"))
 			return getResourceSWCTree("OP_1", "tests/OP_1-gs.swc");
-		else 
-		return getResourceSWCTree("AA0001", "ml/demo-trees/AA0001.swc");
+		else
+			return getResourceSWCTree("AA0001", "ml/demo-trees/AA0001.swc");
 	}
 
 	private Tree getResourceSWCTree(final String treeLabel, final String resourcePath) {
 		final ClassLoader classloader = Thread.currentThread().getContextClassLoader();
 		final InputStream is = classloader.getResourceAsStream(resourcePath);
-		final PathAndFillManager pafm = new PathAndFillManager();
+		final PathAndFillManager pafm = new PathAndFillManager(1, 1, 1, GuiUtils.micrometer());
 		pafm.setHeadless(true);
 		Tree tree;
 		try {
@@ -549,7 +538,7 @@ public class SNTService extends AbstractService implements ImageJService {
 					tree.add(p);
 				}
 				tree.setLabel(treeLabel);
-				tree.getProperties().setProperty(Tree.KEY_SPATIAL_UNIT, "um");
+				tree.getProperties().setProperty(Tree.KEY_SPATIAL_UNIT, GuiUtils.micrometer());
 				tree.getProperties().setProperty(Tree.KEY_SOURCE, "SNT Demo");
 			} else {
 				return null;
@@ -577,9 +566,11 @@ public class SNTService extends AbstractService implements ImageJService {
 	 * Returns one of the demo images bundled with SNT image associated with the
 	 * demo (fractal) tree.
 	 *
-	 * @param img a string describing the type of demo image. Either 'fractal' for
-	 *            the L-system toy neuron or 'ddaC' for the C4 ddaC drosophila
-	 *            neuron, a demo image initially distributed with the Sholl plugin.
+	 * @param img a string describing the type of demo image. Options include:
+	 *            'fractal' for the L-system toy neuron; 'ddaC' for the C4 ddaC
+	 *            drosophila neuron (demo image initially distributed with the Sholl
+	 *            plugin); 'OP1'/'OP_1' for the DIADEM OP_1 dataset; 'cil701' and
+	 *            'cil810' for the respective Cell Image Library entries
 	 * @return the demo image, or null if data could no be retrieved
 	 * @see #demoTree(String)
 	 */
@@ -592,14 +583,44 @@ public class SNTService extends AbstractService implements ImageJService {
 		} else if (nImg.contains("op")) {
 			return ij.IJ.openImage(
 					"https://github.com/morphonets/SNT/raw/0b3451b8e62464a270c9aab372b4f651c4cf9af7/src/test/resources/OP_1.tif");
-		} else if (nImg.contains("multichannel")) {
+		} else if (nImg.equalsIgnoreCase("rat_hippocampal_neuron") || (nImg.contains("hip") && nImg.contains("multichannel"))) {
 			return ij.IJ.openImage("http://wsr.imagej.net/images/Rat_Hippocampal_Neuron.zip");
-		} else if (nImg.contains("4d") || nImg.contains("timelapse")) {
-			final ImagePlus imp = IJ.openImage("https://cildata.crbs.ucsd.edu/media/images/701/701.tif");
-			if (imp != null) imp.setDimensions(1, 1, imp.getNSlices());
-			return imp;
+		} else if (nImg.contains("4d") || nImg.contains("timelapse") || nImg.contains("701")) {
+			return cil701();
+		} else if (nImg.contains("multipolar") || nImg.contains("810")) {
+			return cil810();
 		}
 		return demoImageInternal("tests/TreeV.tif", "TreeV.tif");
+	}
+
+	private ImagePlus cil701() {
+		final ImagePlus imp = IJ.openImage("https://cildata.crbs.ucsd.edu/media/images/701/701.tif");
+		if (imp != null) {
+			imp.setDimensions(1, 1, imp.getNSlices());
+			imp.getCalibration().setUnit("um");
+			imp.getCalibration().pixelWidth = 0.169;
+			imp.getCalibration().pixelHeight = 0.169;
+			imp.getCalibration().frameInterval = 3000;
+			imp.getCalibration().setTimeUnit("s");
+			imp.setTitle("CIL_Dataset_#701.tif");
+		}
+		return imp;
+	}
+
+	private ImagePlus cil810() {
+		ImagePlus imp = IJ.openImage("https://cildata.crbs.ucsd.edu/media/images/810/810.tif");
+		if (imp != null) {
+			imp.setDimensions(imp.getNSlices(), 1, 1);
+			imp.getStack().setSliceLabel("N-cadherin", 1);
+			imp.getStack().setSliceLabel("V-glut 1/2", 2);
+			imp.getStack().setSliceLabel("NMDAR", 3);
+			imp.getCalibration().setUnit("um");
+			imp.getCalibration().pixelWidth = 0.113;
+			imp.getCalibration().pixelHeight = 0.113;
+			imp.setTitle("CIL_Dataset_#810.tif");
+			imp = new CompositeImage(imp, CompositeImage.COMPOSITE);
+		}
+		return imp;
 	}
 
 	private ImagePlus demoImageInternal(final String path, final String displayTitle) {

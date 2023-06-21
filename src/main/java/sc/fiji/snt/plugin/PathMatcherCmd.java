@@ -2,7 +2,7 @@
  * #%L
  * Fiji distribution of ImageJ for the life sciences.
  * %%
- * Copyright (C) 2010 - 2022 Fiji developers.
+ * Copyright (C) 2010 - 2023 Fiji developers.
  * %%
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as
@@ -54,7 +54,7 @@ import sc.fiji.snt.util.SNTColor;
  *
  * @author Tiago Ferreira
  */
-@Plugin(type = Command.class, visible = false, label="Match Path(s) Across Time...", initializer = "init")
+@Plugin(type = Command.class, label="Match Path(s) Across Time...", initializer = "init")
 public class PathMatcherCmd extends CommonDynamicCmd {
 
 	private static final String TAG_FORMAT = "{Group %d}";
@@ -180,9 +180,9 @@ public class PathMatcherCmd extends CommonDynamicCmd {
 		// Operate only on paths matching inputRange
 		final Stack<MatchingPath> mPaths = new Stack<>();
 		if (timePoints == null) {
-			paths.stream().forEach(p -> mPaths.push(new MatchingPath(p)));
+			paths.forEach(p -> mPaths.push(new MatchingPath(p)));
 		} else {
-			paths.stream().forEach(p-> {
+			paths.forEach(p-> {
 				if (timePoints.contains(p.getFrame())) mPaths.push(new MatchingPath(p));
 			});
 		}

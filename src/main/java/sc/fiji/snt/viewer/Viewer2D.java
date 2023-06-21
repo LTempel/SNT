@@ -2,7 +2,7 @@
  * #%L
  * Fiji distribution of ImageJ for the life sciences.
  * %%
- * Copyright (C) 2010 - 2022 Fiji developers.
+ * Copyright (C) 2010 - 2023 Fiji developers.
  * %%
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as
@@ -62,6 +62,8 @@ import sc.fiji.snt.Tree;
 import sc.fiji.snt.analysis.ColorMapper;
 import sc.fiji.snt.analysis.SNTChart;
 import sc.fiji.snt.analysis.TreeColorMapper;
+import sc.fiji.snt.gui.GuiUtils;
+
 import org.scijava.ui.swing.viewer.plot.jfreechart.XYPlotConverter;
 import sc.fiji.snt.util.PointInImage;
 import sc.fiji.snt.util.SNTColor;
@@ -284,7 +286,7 @@ public class Viewer2D extends TreeColorMapper {
 			return;
 		}
 		chart = getChart();
-		chart.getChartPanel().getChart().addSubtitle(getPaintScaleLegend(colorTable, min, max));
+		chart.getChart().addSubtitle(getPaintScaleLegend(colorTable, min, max));
 	}
 
 	protected PaintScaleLegend getPaintScaleLegend(final String colorTable, double min, double max) {
@@ -313,7 +315,10 @@ public class Viewer2D extends TreeColorMapper {
 		}
 		numberAxis.setAutoRangeIncludesZero(min <=0 && max >= 0);
 		numberAxis.setRange(min, max);
+		numberAxis.setAutoTickUnitSelection(true);
 		numberAxis.centerRange((max+min)/2);
+		numberAxis.setLabelFont(numberAxis.getLabelFont().deriveFont(GuiUtils.uiFontSize()));
+		numberAxis.setTickLabelFont(numberAxis.getTickLabelFont().deriveFont(GuiUtils.uiFontSize()));
 		final PaintScaleLegend psl = new PaintScaleLegend(paintScale, numberAxis);
 		psl.setBackgroundPaint(null); // transparent
 		psl.setPosition(RectangleEdge.RIGHT);
@@ -457,7 +462,7 @@ public class Viewer2D extends TreeColorMapper {
 	 */
 	@Deprecated
 	public JFreeChart getJFreeChart() {
-		return getChart().getChartPanel().getChart();
+		return getChart().getChart();
 	}
 
 	/**
@@ -482,7 +487,6 @@ public class Viewer2D extends TreeColorMapper {
 	/**
 	 * Gets the current plot as a {@link XYPlot} object
 	 *
-	 * @param show if true, plot is displayed
 	 * @return the current plot
 	 */
 	public XYPlot getPlot() {

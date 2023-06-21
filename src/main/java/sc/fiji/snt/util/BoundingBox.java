@@ -2,7 +2,7 @@
  * #%L
  * Fiji distribution of ImageJ for the life sciences.
  * %%
- * Copyright (C) 2010 - 2022 Fiji developers.
+ * Copyright (C) 2010 - 2023 Fiji developers.
  * %%
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as
@@ -163,7 +163,7 @@ public class BoundingBox {
 	 */
 	public boolean isScaled() {
 		return xSpacing != 1d || ySpacing != 1d || zSpacing != 1d ||
-			spacingUnit != DEF_SPACING_UNIT;
+				!spacingUnit.equals(DEF_SPACING_UNIT);
 	}
 
 	/**

@@ -2,7 +2,7 @@
  * #%L
  * Fiji distribution of ImageJ for the life sciences.
  * %%
- * Copyright (C) 2010 - 2022 Fiji developers.
+ * Copyright (C) 2010 - 2023 Fiji developers.
  * %%
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as
@@ -229,7 +229,7 @@ public class SNTTable extends DefaultGenericTable {
 				} catch (final NullPointerException ignored) {
 					// do nothing. Empty cell!?
 				} catch (final ClassCastException ignored) {
-					// Cell with text!? We could add Double.NAN, or skip it altogether'
+					// Cell with text!? We could add Double.NAN, or skip it altogether
 					// skipping for now, in case cells above and below are valid
 				}
 			}

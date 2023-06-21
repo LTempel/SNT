@@ -2,7 +2,7 @@
  * #%L
  * Fiji distribution of ImageJ for the life sciences.
  * %%
- * Copyright (C) 2010 - 2022 Fiji developers.
+ * Copyright (C) 2010 - 2023 Fiji developers.
  * %%
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as
@@ -76,13 +76,9 @@ import sc.fiji.snt.analysis.TreeAnalyzer;
 import sc.fiji.snt.analysis.sholl.ShollUtils;
 import sc.fiji.snt.event.SNTEvent;
 import sc.fiji.snt.gui.*;
+import sc.fiji.snt.gui.DemoRunner.Demo;
 import sc.fiji.snt.gui.cmds.*;
 import sc.fiji.snt.hyperpanes.MultiDThreePanes;
-import sc.fiji.snt.gui.CheckboxSpinner;
-import sc.fiji.snt.gui.ColorChooserButton;
-import sc.fiji.snt.gui.FileDrop;
-import sc.fiji.snt.gui.GuiUtils;
-import sc.fiji.snt.gui.IconFactory;
 import sc.fiji.snt.gui.IconFactory.GLYPH;
 import sc.fiji.snt.io.FlyCircuitLoader;
 import sc.fiji.snt.io.NeuroMorphoLoader;
@@ -103,7 +99,6 @@ public class SNTUI extends JDialog {
 
 	/* UI */
 	private static final int MARGIN = 2;
-	private final JMenuBar menuBar;
 	private JCheckBox showPathsSelected;
 	protected CheckboxSpinner partsNearbyCSpinner;
 	protected JCheckBox useSnapWindow;
@@ -219,6 +214,7 @@ public class SNTUI extends JDialog {
 	protected boolean askUserConfirmation = true;
 	private boolean openingSciView;
 	private SigmaPaletteListener sigmaPaletteListener;
+	private ScriptRecorder recorder;
 
 	/**
 	 * Instantiates SNT's main UI and associated {@link PathManagerUI} and
@@ -233,7 +229,9 @@ public class SNTUI extends JDialog {
 
 	private SNTUI(final SNT plugin, final PathManagerUI pmUI, final FillManagerUI fmUI) {
 
-		super(plugin.legacyService.getIJ1Helper().getIJ(), "SNT v" + SNTUtils.VERSION, false);
+		super(ij.IJ.getInstance(), "SNT v" + SNTUtils.VERSION, false);
+		// if embedded, menu bar becomes truncated on M. Windows 10/11
+		getRootPane().putClientProperty("JRootPane.menuBarEmbedded", false);
 		guiUtils = new GuiUtils(this);
 		this.plugin = plugin;
 		new ClarifyingKeyListener(plugin).addKeyAndContainerListenerRecursively(this);
@@ -351,7 +349,7 @@ public class SNTUI extends JDialog {
 			++c3.gridy;
 			final String msg3 =
 				"Modern 3D visualization framework supporting large image volumes, " +
-				"reconstructions, meshes, and virtual reality. Discrete graphics card recommended. " +
+				"reconstructions, meshes, virtual reality, and Cx3D simulations. Discrete graphics card recommended. " +
 				"For performance reasons, some Path Manager changes may need to be synchronized " +
 				"manually using \"Sync Changes\".";
 			tab3.add(largeMsg(msg3), c3);
@@ -382,7 +380,7 @@ public class SNTUI extends JDialog {
 			}
 		}
 
-		setJMenuBar(menuBar = createMenuBar());
+		setJMenuBar(createMenuBar());
 		setLayout(new GridBagLayout());
 		final GridBagConstraints dialogGbc = GuiUtils.defaultGbc();
 		add(statusPanel(), dialogGbc);
@@ -448,19 +446,7 @@ public class SNTUI extends JDialog {
 	}
 
 	private JTabbedPane getTabbedPane() {
-
-		/*
-		 * TF: This is an effort at improving the tabbed interface. JIDE provides such
-		 * functionality by default, but causes some weird looking L&F overrides (at
-		 * least on macOS). Since I have no idea on how to stop JIDE from injecting
-		 * such weirdness, we'll implement the customization ourselves.
-		 */
-		// final JideTabbedPane tabbedPane = new JideTabbedPane(JTabbedPane.TOP);
-		// tabbedPane.setBoldActiveTab(true);
-		// tabbedPane.setScrollSelectedTabOnWheel(true);
-		// tabbedPane.setTabResizeMode(JideTabbedPane.RESIZE_MODE_NONE);
-
-		final JTabbedPane tabbedPane = new JTabbedPane(JTabbedPane.TOP);
+		final JTabbedPane tabbedPane = GuiUtils.getTabbedPane();
 		tabbedPane.addChangeListener(e -> {
 			final JTabbedPane source = (JTabbedPane) e.getSource();
 			final int selectedTab = source.getSelectedIndex();
@@ -474,51 +460,14 @@ public class SNTUI extends JDialog {
 			}
 
 			// Highlight active tab. This assumes tab's title contains "HTML"
-			for (int i = 0; i < source.getTabCount(); i++) {
-				final String existingTile = source.getTitleAt(i);
-				final String newTitle = (i == selectedTab) ? existingTile.replace("<HTML>", "<HTML><b>")
-						: existingTile.replace("<HTML><b>", "<HTML>");
-				source.setTitleAt(i, newTitle);
-			}
+			//TF: With FlatLaf, this is no longer useful!?
+//			for (int i = 0; i < source.getTabCount(); i++) {
+//				final String existingTile = source.getTitleAt(i);
+//				final String newTitle = (i == selectedTab) ? existingTile.replace("<HTML>", "<HTML><b>")
+//						: existingTile.replace("<HTML><b>", "<HTML>");
+//				source.setTitleAt(i, newTitle);
+//			}
 		});
-		tabbedPane.addMouseWheelListener(e -> {
-			//https://stackoverflow.com/a/38463104
-			final JTabbedPane pane = (JTabbedPane) e.getSource();
-			final int units = e.getWheelRotation();
-			final int oldIndex = pane.getSelectedIndex();
-			final int newIndex = oldIndex + units;
-			if (newIndex < 0)
-				pane.setSelectedIndex(0);
-			else if (newIndex >= pane.getTabCount())
-				pane.setSelectedIndex(pane.getTabCount() - 1);
-			else
-				pane.setSelectedIndex(newIndex);
-		});
-
-		final JPopupMenu popup = new JPopupMenu();
-		tabbedPane.setComponentPopupMenu(popup);
-		final ButtonGroup group = new ButtonGroup();
-		for (final String pos : new String[] { "Top", "Bottom", "Left", "Right" }) {
-			final JMenuItem jcbmi = new JCheckBoxMenuItem("Place on " + pos, "Top".equals(pos));
-			jcbmi.addItemListener(e -> {
-				switch (pos) {
-				case "Top":
-					tabbedPane.setTabPlacement(JTabbedPane.TOP);
-					break;
-				case "Bottom":
-					tabbedPane.setTabPlacement(JTabbedPane.BOTTOM);
-					break;
-				case "Left":
-					tabbedPane.setTabPlacement(JTabbedPane.LEFT);
-					break;
-				case "Right":
-					tabbedPane.setTabPlacement(JTabbedPane.RIGHT);
-					break;
-				}
-			});
-			group.add(jcbmi);
-			popup.add(jcbmi);
-		}
 		return tabbedPane;
 	}
 
@@ -585,19 +534,83 @@ public class SNTUI extends JDialog {
 	 * @throws IllegalArgumentException if {@code cmd} was not found.
 	 */
 	public void runCommand(final String cmd) throws IllegalArgumentException {
+		if (!runCustomCommand(cmd) && !getPathManager().runCustomCommand(cmd))
+			runSNTCommandFinderCommand(cmd);
+	}
+
+	/**
+	 * Runs a menu command with options.
+	 *
+	 * @param cmd  The command to be run, exactly as listed in SNTUI's menu bar
+	 * @param args the option(s) that would fill the command's prompt. e.g.,
+	 *             'runCommand("Load Demo Dataset...", "4. Hippocampal neuron (DIC
+	 *             timelapse)")'
+	 * @throws IllegalArgumentException if {@code cmd} is not found or supported.
+	 */
+	public void runCommand(final String cmd, String... args) throws IllegalArgumentException {
+		if (args == null || args.length == 1 && args[0].trim().isEmpty()) {
+			runCommand(cmd);
+			return;
+		}
+		switch (cmd) {
+		case "Directory of SWCs...":
+			new ImportAction(ImportAction.SWC_DIR, new File(args[0])).run();
+			break;
+		case "e(SWC)...":
+			new ImportAction(ImportAction.SWC, new File(args[0])).run();
+			break;
+		case "From File...":
+			new ImportAction(ImportAction.IMAGE, new File(args[0])).run();
+			break;
+		case "Guess File Type...":
+			new ImportAction(ImportAction.ANY_RECONSTRUCTION, new File(args[0])).run();
+			break;
+		case "JSON...":
+			new ImportAction(ImportAction.JSON, new File(args[0])).run();
+			break;
+		case "Load Demo Dataset...":
+			new ImportAction(ImportAction.DEMO, new File(args[0])).run();
+			break;
+		case "NDF...":
+			new ImportAction(ImportAction.NDF, new File(args[0])).run();
+			break;
+		case "TRACES...":
+			new ImportAction(ImportAction.TRACES, new File(args[0])).run();
+			break;
+		default:
+			throw new IllegalArgumentException("Unsupported options for '" + cmd + "'");
+		}
+	}
+
+	protected void runSNTCommandFinderCommand(final String cmd) {
+		commandFinder.runCommand(cmd);
+	}
+
+	protected boolean runCustomCommand(final String cmd) {
 		if ("validateImgDimensions".equals(cmd)) {
 			validateImgDimensions();
-			return;
-		}
-		else if ("cmdPalette".equals(cmd)) {
+			return true;
+		} else if ("cmdPalette".equals(cmd)) {
 			commandFinder.toggleVisibility();
-			return;
+			return false;
 		}
-		try {
-			runCommand(menuBar, cmd);
-		} catch (final IllegalArgumentException ie) {
-			getPathManager().runCommand(cmd);
-		}
+		return false;
+	}
+
+	/**
+	 * Runs the autotracing prompt on the active image, assumed to be binary (script
+	 * friendly method).
+	 *
+	 * @param simplified whether wizard should omit advanced options
+	 */
+	public void runAutotracingWizard(final boolean simplified) {
+		SwingUtilities.invokeLater(() -> {
+			if (plugin.accessToValidImageData() && plugin.getImagePlus().getProcessor().isBinary()) {
+				runAutotracingOnImage(simplified);
+			} else {
+				noValidImageDataError();
+			}
+		});
 	}
 
 	/**
@@ -766,7 +779,7 @@ public class SNTUI extends JDialog {
 	protected void exitRequested() {
 		assert SwingUtilities.isEventDispatchThread();
 		String msg = "Exit SNT?";
-		if (plugin.isChangesUnsaved())
+		if (plugin.isUnsavedChanges())
 			msg = "There are unsaved paths. Do you really want to quit?";
 		if (pmUI.measurementsUnsaved())
 			msg = "There are unsaved measurements. Do you really want to quit?";
@@ -776,12 +789,15 @@ public class SNTUI extends JDialog {
 		abortCurrentOperation();
 		plugin.cancelSearch(true);
 		plugin.notifyListeners(new SNTEvent(SNTEvent.QUIT));
+		setAutosaveFile(null); // forget last saved file
 		plugin.getPrefs().savePluginPrefs(true);
 		pmUI.dispose();
 		pmUI.closeTable();
 		fmUI.dispose();
 		if (recViewer != null)
 			recViewer.dispose();
+		if (recorder != null)
+			recorder.dispose();
 		dispose();
 		// NB: If visible Reconstruction Plotter will remain open
 		plugin.closeAndResetAllPanes();
@@ -1739,11 +1755,11 @@ public class SNTUI extends JDialog {
 		// Build actions
 		class ApplyLabelsAction extends AbstractAction {
 
-			final static String LABEL = "Apply Color Labels...";
+			static final String LABEL = "Apply Color Labels...";
 
 			@Override
 			public void actionPerformed(final ActionEvent e) {
-				final File imageFile = openFile("Choose Labels Image...", (File) null);
+				final File imageFile = openReconstructionFile("labels");
 				if (imageFile == null)
 					return; // user pressed cancel
 				try {
@@ -2116,7 +2132,7 @@ public class SNTUI extends JDialog {
 				plugin.flushSecondaryData();
 			} else {
 				final File proposedFile = (plugin.getFilteredImageFile() == null) ? plugin.getPrefs().getRecentDir() : plugin.getFilteredImageFile();
-				final File file = openFile("Choose Secondary Image", proposedFile);
+				final File file = guiUtils.getOpenFile("Choose Secondary Image", proposedFile);
 				if (file == null)
 					return;
 				loadSecondaryImageFile(file);
@@ -2124,19 +2140,11 @@ public class SNTUI extends JDialog {
 		});
 		final JMenuItem revealMenuItem = new JMenuItem("Show Folder of Loaded File");
 		revealMenuItem.addActionListener(e -> {
-			try {
-				if (!plugin.isSecondaryDataAvailable() || !plugin.isSecondaryImageFileLoaded()) {
-					noSecondaryImgFileAvailableError();
-					return;
-				}
-				if (SNTUtils.fileAvailable(plugin.getFilteredImageFile())) {
-					guiUtils.showDirectory(plugin.getFilteredImageFile());
-				} else {
-					guiUtils.error("<HTML>Could not access<br>" + plugin.getFilteredImageFile().getAbsolutePath());
-				}
-			} catch (final Exception ignored) {
-				guiUtils.error("An error occurred: Image directory not available?");
+			if (!plugin.isSecondaryDataAvailable() || !plugin.isSecondaryImageFileLoaded()) {
+				noSecondaryImgFileAvailableError();
+				return;
 			}
+			guiUtils.showDirectory(plugin.getFilteredImageFile());
 		});
 		externalImgOptionsMenu.add(secLayerExternalImgLoadFlushMenuItem);
 		externalImgOptionsMenu.addSeparator();
@@ -2261,34 +2269,25 @@ public class SNTUI extends JDialog {
 		updateExternalImgWidgets();
 	}
 
-	protected File openFile(final String promptMsg, final String extension) {
-		final String suggestFilename = (plugin.accessToValidImageData()) ? plugin.getImagePlus().getShortTitle() : "SNT_Data";
+	protected File openReconstructionFile(final String extension) {
+		final String suggestFilename = (plugin.accessToValidImageData()) ? plugin.getImagePlus().getTitle() : "SNT_Data";
 		final File suggestedFile = SNTUtils.findClosestPair(new File(plugin.getPrefs().getRecentDir(), suggestFilename), extension);
-		return openFile(promptMsg, suggestedFile);
+		return guiUtils.getReconstructionFile(suggestedFile, extension);
 	}
 
-	protected File openFile(final String promptMsg, final File suggestedFile) {
-		final boolean focused = hasFocus(); //HACK: On macOS this seems to help to ensure prompt is displayed as frontmost
-		if (focused) toBack();
-		final File openedFile = plugin.legacyService.getIJ1Helper().openDialog(promptMsg, suggestedFile);
-		if (openedFile != null)
-			plugin.getPrefs().setRecentDir(openedFile);
-		if (focused) toFront();
-		return openedFile;
-	}
-
-	protected File saveFile(final String promptMsg, final String suggestedFileName, final String fallbackExtension) {
-		final File fFile = new File(plugin.getPrefs().getRecentDir(),
-				(suggestedFileName == null) ? "SNT_Data" : suggestedFileName);
-		final boolean focused = hasFocus();
-		if (focused)
-			toBack();
-		final File savedFile = plugin.legacyService.getIJ1Helper().saveDialog(promptMsg, fFile, fallbackExtension);
-		if (savedFile != null)
-			plugin.getPrefs().setRecentDir(savedFile);
-		if (focused)
-			toFront();
-		return savedFile;
+	protected File saveFile(final String promptMsg, final String suggestedFile, final String extensionWithoutDot) {
+		String filename;
+		if (suggestedFile == null) {
+			if (plugin.accessToValidImageData())
+				filename = SNTUtils.stripExtension(plugin.getImagePlus().getShortTitle());
+			else
+				filename = "SNT_Data";
+			filename += "." + extensionWithoutDot;
+		} else {
+			filename = suggestedFile;
+		}
+		final File fFile = new File(plugin.getPrefs().getRecentDir(), filename);
+		return guiUtils.getSaveFile(promptMsg, fFile, extensionWithoutDot);
 	}
 
 	private void loadCachedDataImage(final boolean warnUserOnMemory,
@@ -2393,7 +2392,7 @@ public class SNTUI extends JDialog {
 		menuBar.add(analysisMenu);
 		final JMenu utilitiesMenu = new JMenu("Utilities");
 		menuBar.add(utilitiesMenu);
-		final ScriptInstaller installer = new ScriptInstaller(plugin.getContext(), this);
+		final ScriptInstaller installer = new ScriptInstaller(plugin.getContext(), SNTUI.this);
 		menuBar.add(installer.getScriptsMenu());
 		final JMenu viewMenu = new JMenu("View");
 		menuBar.add(viewMenu);
@@ -2453,11 +2452,17 @@ public class SNTUI extends JDialog {
 			(new DynamicCmdRunner(SaveMeasurementsCmd.class, null, getState())).run();
 		});
 		fileMenu.add(saveTable);
+		final JMenuItem restoreMenuItem = new JMenuItem("Restore Snapshot Backup...");
+		restoreMenuItem.setToolTipText("Restores data from existing timecoded backups stored on disk");
+		restoreMenuItem.setIcon(IconFactory.getMenuIcon(GLYPH.CLOCK_ROTATE_LEFT));
+		restoreMenuItem.addActionListener(e -> revertFromBackup());
+		fileMenu.add(restoreMenuItem);
 
 		fileMenu.addSeparator();
 		sendToTrakEM2 = new JMenuItem("Send to TrakEM2");
 		sendToTrakEM2.addActionListener(e -> plugin.notifyListeners(new SNTEvent(SNTEvent.SEND_TO_TRAKEM2)));
 		fileMenu.add(sendToTrakEM2);
+		fileMenu.add(showFolderMenu(installer));
 
 		final JMenuItem importGuessingType = new JMenuItem("Guess File Type...", IconFactory.getMenuIcon(GLYPH.MAGIC));
 		importSubmenu.add(importGuessingType);
@@ -2524,11 +2529,30 @@ public class SNTUI extends JDialog {
 		});
 		importSubmenu.add(remoteSubmenu);
 
-		saveMenuItem = new JMenuItem("TRACES...");
-		saveMenuItem.addActionListener(listener);
+		saveMenuItem = new JMenuItem("Save");
+		saveMenuItem.setToolTipText("Saves tracings to a TRACES (XML) file.\n"
+				+ "This file may be gzip compressed as per options in the Preferences dialog.");
+		saveMenuItem.setAccelerator(
+				KeyStroke.getKeyStroke(KeyEvent.VK_S, java.awt.Toolkit.getDefaultToolkit().getMenuShortcutKeyMask()));
+		saveMenuItem.addActionListener(e -> saveToXML(false));
 		exportSubmenu.add(saveMenuItem);
-		exportAllSWCMenuItem = new JMenuItem("SWC...");
+		final JMenuItem saveCopyMenuItem = new JMenuItem("Save Snapshot Backup");
+		saveCopyMenuItem.setToolTipText("Saves data to a timecoded backup TRACES file on main file's directory");
+		saveCopyMenuItem.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_S,
+				java.awt.Toolkit.getDefaultToolkit().getMenuShortcutKeyMask() | KeyEvent.SHIFT_DOWN_MASK));
+		exportSubmenu.add(saveCopyMenuItem);
+		saveCopyMenuItem.addActionListener(e -> saveToXML(true));
+		final JMenuItem saveAsMenuItem = new JMenuItem("Save As...");
+		exportSubmenu.add(saveAsMenuItem);
+		saveAsMenuItem.addActionListener(e -> {
+			if (!noPathsError()) {
+				final File saveFile = saveFile("Save Traces As...", null, "traces");
+				if (saveFile != null) saveToXML(saveFile);
+			}
+		});
+		exportAllSWCMenuItem = new JMenuItem("Export As SWC...");
 		exportAllSWCMenuItem.addActionListener(listener);
+		exportSubmenu.addSeparator();
 		exportSubmenu.add(exportAllSWCMenuItem);
 
 		final JMenuItem restartMenuItem = new JMenuItem("Reset and Restart...", IconFactory.getMenuIcon(IconFactory.GLYPH.RECYCLE));
@@ -2546,10 +2570,10 @@ public class SNTUI extends JDialog {
 			}
 		});
 
+
 		fileMenu.addSeparator();
 		fileMenu.add(restartMenuItem);
 		fileMenu.addSeparator();
-
 		quitMenuItem = new JMenuItem("Quit", IconFactory.getMenuIcon(IconFactory.GLYPH.QUIT));
 		quitMenuItem.addActionListener(listener);
 		fileMenu.add(quitMenuItem);
@@ -2617,6 +2641,16 @@ public class SNTUI extends JDialog {
 		exportCSVMenuItem.addActionListener(listener);
 		analysisMenu.add(exportCSVMenuItem);
 		analysisMenu.addSeparator();
+		final JMenuItem brainMenuItem = GuiUtils.MenuItems.brainAreaAnalysis();
+		brainMenuItem.addActionListener(e -> {
+			if (noPathsError()) return;
+			final Tree tree = getPathManager().getSingleTree();
+			if (tree == null) return;
+			final HashMap<String, Object> inputs = new HashMap<>();
+			inputs.put("tree", tree);
+			new DynamicCmdRunner(BrainAnnotationCmd.class, inputs).run();
+		});
+		analysisMenu.add(brainMenuItem);
 		final JMenuItem shollMenuItem = GuiUtils.MenuItems.shollAnalysis();
 		shollMenuItem.addActionListener(e -> {
 			if (noPathsError()) return;
@@ -2625,7 +2659,7 @@ public class SNTUI extends JDialog {
 			final HashMap<String, Object> inputs = new HashMap<>();
 			inputs.put("tree", tree);
 			inputs.put("snt", plugin);
-			(new DynamicCmdRunner(ShollAnalysisTreeCmd.class, inputs, getState())).run();
+			new DynamicCmdRunner(ShollAnalysisTreeCmd.class, inputs).run();
 		});
 		analysisMenu.add(shollMenuItem);
 		analysisMenu.add(shollAnalysisHelpMenuItem());
@@ -2661,10 +2695,18 @@ public class SNTUI extends JDialog {
 		utilitiesMenu.add(compareFiles);
 		compareFiles.addActionListener(e -> {
 			final String[] choices = { "Compare two files", "Compare groups of cells (two or more)" };
+			final String[] desc = { //
+					"Opens the contents of two reconstruction files in Reconstruction Viewer. "//
+							+ "A statistical summary of each file is displayed on a dedicated table. "//
+							+ "Note that is also possible to compare two files in the legacy 3D Viewer "//
+							+ "('Legacy viewer' widget in the '3D' tab).", //
+					"Compares up to 6 groups of cells. Detailed measurements and comparison plots "//
+							+ "are retrieved for selected metric(s). Color-coded montages of group-metrics "
+							+ "can also be generated."//
+			};
 			final String defChoice = plugin.getPrefs().getTemp("compare", choices[1]);
-			final String choice = guiUtils.getChoice("Which kind of comparison would you like to perform?"
-					+ "<br><br>NB: It is also possible to compare two files in the legacy 3D Viewer (cf. 3D tab).",
-					"Single or Group Comparison?", choices, defChoice);
+			final String choice = guiUtils.getChoice("Which kind of comparison would you like to perform?",
+					"Single or Group Comparison?", choices, desc, defChoice);
 			if (choice == null) return;
 			plugin.getPrefs().setTemp("compare", choice);
 			if (choices[0].equals(choice))
@@ -2684,12 +2726,23 @@ public class SNTUI extends JDialog {
 			inputs.put("tree", tree);
 			(new DynamicCmdRunner(GraphGeneratorCmd.class, inputs)).run();
 		});
+		final JMenuItem annotGenerator = GuiUtils.MenuItems.createAnnotionGraph();
+		utilitiesMenu.add(annotGenerator);
+		annotGenerator.addActionListener(e -> {
+			if (noPathsError()) return;
+			final Collection<Tree> trees = getPathManager().getMultipleTrees();
+			if (trees == null) return;
+			final HashMap<String, Object> inputs = new HashMap<>();
+			inputs.put("trees", trees);
+			(new DynamicCmdRunner(AnnotationGraphGeneratorCmd.class, inputs)).run();
+		});
 		utilitiesMenu.addSeparator();
+
 		// similar to File>Autotrace image... but assuming current image as source, which does
 		// not require file validations etc..
 		final JMenuItem autotraceJMI = getAutotracingMenuItem("Extract Paths from Segmented Image...", false);
 		utilitiesMenu.add(autotraceJMI);
-		autotraceJMI.addActionListener(e -> runAutotracingOnImage());
+		autotraceJMI.addActionListener(e -> runAutotracingOnImage(false));
 
 		utilitiesMenu.addSeparator();
 		final JMenu scriptUtilsMenu = installer.getBatchScriptsMenu();
@@ -2739,15 +2792,13 @@ public class SNTUI extends JDialog {
 		viewMenu.add(showImpMenuItem);
 		viewMenu.addSeparator();
 
-		final JMenuItem consoleJMI = new JMenuItem("Toggle Console");
+		final JMenuItem consoleJMI = new JMenuItem("Toggle Fiji Console");
 		consoleJMI.addActionListener(e -> {
 			try {
 				for (final Window w : JFrame.getWindows()) {
-					if (w instanceof JFrame) {
-						if ("Console".equals(((JFrame) w).getTitle())) {
-							w.setVisible(!w.isVisible());
-							return;
-						}
+					if (w instanceof JFrame && ("Console".equals(((JFrame) w).getTitle()))) {
+						w.setVisible(!w.isVisible());
+						return;
 					}
 				}
 				plugin.getContext().getService(UIService.class).getDefaultUI().getConsolePane().show();
@@ -2758,10 +2809,62 @@ public class SNTUI extends JDialog {
 			}
 		});
 		viewMenu.add(consoleJMI);
-		viewMenu.addSeparator();
+		//viewMenu.addSeparator();
 
-		viewMenu.add(guiUtils.combineChartsMenuItem());
+		//viewMenu.add(guiUtils.combineChartsMenuItem());
 		return menuBar;
+	}
+
+	private JMenu showFolderMenu(final ScriptInstaller installer) {
+		final JMenu menu = new JMenu("Reveal Directory");
+		menu.setIcon(IconFactory.getMenuIcon(GLYPH.OPEN_FOLDER));
+		final String[] labels = { "Fiji Scripts", "Image", "Last Accessed", "Snapshot Backup(s)", "TRACES" };
+		Arrays.stream(labels).forEach(label -> {
+			final JMenuItem jmi = new JMenuItem(label + " Folder");
+			menu.add(jmi);
+			jmi.addActionListener(e -> {
+				File f = null;
+				boolean proceed = true;
+				switch (label) {
+				case "Fiji Scripts":
+					f = installer.getScriptsDir();
+					break;
+				case "Image":
+					if (!plugin.accessToValidImageData()) {
+						noValidImageDataError();
+						proceed = false;
+					}
+					try {
+						f = new File(plugin.getImagePlus().getOriginalFileInfo().getFilePath());
+					} catch (final Exception ignored) {
+						// do nothing
+					}
+					break;
+				case "Last Accessed":
+					f = plugin.getPrefs().getRecentDir();
+					break;
+				case "Snapshot Backup(s)":
+					f = getAutosaveFile();
+					if (SNTUtils.getBackupCopies(f).isEmpty()) {
+						guiUtils.error("No Snapshot Backup(s) seem to exist for current tracings.");
+						proceed = false;
+					}
+					break;
+				case "TRACES":
+					f = getAutosaveFile();
+					if (f == null) {
+						guiUtils.error("Current tracings do not seem to be associated with a TRACES file.");
+						proceed = false;
+					}
+					break;
+				default:
+					break;
+				}
+				if (proceed)
+					guiUtils.showDirectory(f);
+			});
+		});
+		return menu;
 	}
 
 	private JPanel renderingPanel() {
@@ -2879,7 +2982,7 @@ public class SNTUI extends JDialog {
 			plugin.enableAstar(enable);
 		});
 
-		searchAlgoChoice = new JComboBox<String>();
+		searchAlgoChoice = new JComboBox<>();
 		searchAlgoChoice.addItem("A* search");
 		searchAlgoChoice.addItem("NBA* search");
 		searchAlgoChoice.addItem("Fast marching");
@@ -2902,10 +3005,8 @@ public class SNTUI extends JDialog {
 					} else if (idx == 1) {
 						enableNBAStar();
 						setFastMarchSearchEnabled(false);
-					} else if (idx == 2) {
-						if (!setFastMarchSearchEnabled(true)) {
-							searchAlgoChoice.setSelectedItem(previousSelection);
-						}
+					} else if (idx == 2 && !setFastMarchSearchEnabled(true)) {
+						searchAlgoChoice.setSelectedItem(previousSelection);
 					}
 					updateSettingsString();
 				}
@@ -2978,7 +3079,7 @@ public class SNTUI extends JDialog {
 		manRbmi.addActionListener(e -> {
 			final boolean prevStatsState = plugin.getUseSubVolumeStats();
 			final boolean successfullySet = setMinMaxFromUser();
-			final boolean newStatsState = (successfullySet) ? false : prevStatsState;
+			final boolean newStatsState = !successfullySet && prevStatsState;
 			plugin.setUseSubVolumeStats(newStatsState);
 			manRbmi.setSelected(!newStatsState);
 			autoRbmi.setSelected(newStatsState);
@@ -3136,6 +3237,7 @@ public class SNTUI extends JDialog {
 			if (plugin.getImagePlus()!=null) plugin.getImagePlus().getWindow().toFront();
 			ijmLogMessage();
 			promptForAutoTracingAsAppropriate();
+			guiUtils.notifyIfNewVersion(0);
 		});
 	}
 
@@ -3152,7 +3254,7 @@ public class SNTUI extends JDialog {
 					plugin.getPrefs().setTemp("autotracing-nag", !options[1]);
 				}
 				if (run)
-					runAutotracingOnImage();
+					runAutotracingOnImage(false);
 			}
 		}
 		plugin.getPrefs().setTemp("autotracing-prompt-armed", true);
@@ -3166,17 +3268,17 @@ public class SNTUI extends JDialog {
 		return jmi;
 	}
 
-	private void runAutotracingOnImage() {
+	private void runAutotracingOnImage(final boolean simplifyPrompt) {
 		final HashMap<String, Object> inputs = new HashMap<>();
 		inputs.put("useFileChoosers", false);
+		inputs.put("simplifyPrompt", simplifyPrompt);
 		(new DynamicCmdRunner(SkeletonConverterCmd.class, inputs)).run();
 	}
 
 	private static final void ijmLogMessage() {
 		if (Recorder.record) {
-			final String recordString = "// SNT operations will not be recorded. However, SNT remains fully\n"
-					+ "// scriptable. Have a look at the scripting examples in the Script\n"
-					+ "// Editor, and the documentation resources in SNT's Help> menu\n";
+			final String recordString = "// NB: SNT commands are not recorded by ImageJ, but by SNT's\n"
+					+ "// Script Recorder (Scripts -> New -> Record...)\n";
 			Recorder.recordString(recordString);
 		}
 	}
@@ -3329,11 +3431,18 @@ public class SNTUI extends JDialog {
 		imp.getWindow().setVisible(!mItem.isSelected());
 	}
 
-	private boolean noPathsError() {
+	protected boolean noPathsError() {
 		final boolean noPaths = pathAndFillManager.size() == 0;
 		if (noPaths)
 			guiUtils.error("There are no traced paths.");
 		return noPaths;
+	}
+
+	private boolean notReadyToSaveError() {
+		final boolean notReady = !isReady();
+		if (notReady)
+			plugin.discreteMsg("Please finish current task before saving...");
+		return notReady;
 	}
 
 	private void setPathListVisible(final boolean makeVisible, final boolean toFront) {
@@ -3351,13 +3460,6 @@ public class SNTUI extends JDialog {
 		}
 	}
 
-	private void togglePathListVisibility() {
-		assert SwingUtilities.isEventDispatchThread();
-		synchronized (pmUI) {
-			setPathListVisible(!pmUI.isVisible(), true);
-		}
-	}
-
 	protected void setFillListVisible(final boolean makeVisible) {
 		assert SwingUtilities.isEventDispatchThread();
 		if (makeVisible) {
@@ -3369,17 +3471,6 @@ public class SNTUI extends JDialog {
 			if (showOrHideFillList != null)
 				showOrHideFillList.setText("Show Fill Manager");
 			fmUI.setVisible(false);
-		}
-	}
-
-	private void toggleFillListVisibility() {
-		assert SwingUtilities.isEventDispatchThread();
-		if (!plugin.accessToValidImageData()) {
-			guiUtils.error("Paths can only be filled when valid image data is available.");
-		} else {
-			synchronized (fmUI) {
-				setFillListVisible(!fmUI.isVisible());
-			}
 		}
 	}
 
@@ -3890,11 +3981,6 @@ public class SNTUI extends JDialog {
 					enableSecondaryLayerBuiltin(true); //FIXME: IS this needed?
 				}
 
-			} else if (source == saveMenuItem && !noPathsError()) {
-
-				final File saveFile = saveFile("Save Traces As...", null, ".traces");
-				if (saveFile != null) saveToXML(saveFile);
-
 			} else if (source == loadTracesMenuItem) {
 
 				new ImportAction(ImportAction.TRACES, null).run();
@@ -3913,19 +3999,19 @@ public class SNTUI extends JDialog {
 						"Warning"))
 					return;
 
-				final File saveFile = saveFile("Export All Paths as SWC...", null, ".swc");
+				final File saveFile = saveFile("Export All Paths as SWC...", null, "swc");
 				if (saveFile == null)
 					return; // user pressed cancel
 				saveAllPathsToSwc(saveFile.getAbsolutePath());
 			} else if (source == exportCSVMenuItem && !noPathsError()) {
 
-				final File saveFile = saveFile("Export All Paths as CSV...", "CSV_Properties.csv", ".csv");
+				final File saveFile = saveFile("Export All Paths as CSV...", "CSV_Properties.csv", "csv");
 				if (saveFile == null)
 					return; // user pressed cancel
-				if (saveFile.exists()) {
-					if (!guiUtils.getConfirmation("The file " + saveFile.getAbsolutePath() + " already exists. "
-							+ "Do you want to replace it?", "Override CSV file?"))
-						return;
+				if (saveFile.exists() && !guiUtils.getConfirmation(
+						"The file " + saveFile.getAbsolutePath() + " already exists. " + "Do you want to replace it?",
+						"Override CSV file?")) {
+					return;
 				}
 				final String savePath = saveFile.getAbsolutePath();
 				showStatus("Exporting as CSV to " + savePath, false);
@@ -3947,7 +4033,7 @@ public class SNTUI extends JDialog {
 
 			} else if (source == loadLabelsMenuItem) {
 
-				final File openFile = openFile("Select Labels File...", "labels");
+				final File openFile = openReconstructionFile("labels");
 				if (openFile != null) { // null if user pressed cancel;
 					plugin.loadLabelsFile(openFile.getAbsolutePath());
 					return;
@@ -3979,6 +4065,42 @@ public class SNTUI extends JDialog {
 
 			}
 
+		}
+
+		private void toggleFillListVisibility() {
+			assert SwingUtilities.isEventDispatchThread();
+			if (!plugin.accessToValidImageData()) {
+				guiUtils.error("Paths can only be filled when valid image data is available.");
+			} else {
+				synchronized (fmUI) {
+					setFillListVisible(!fmUI.isVisible());
+				}
+			}
+		}
+
+		private void togglePathListVisibility() {
+			assert SwingUtilities.isEventDispatchThread();
+			synchronized (pmUI) {
+				setPathListVisible(!pmUI.isVisible(), true);
+			}
+		}
+
+		private boolean abortOnPutativeDataLoss() {
+			boolean nag = plugin.getPrefs().getTemp("dataloss-nag", true);
+			if (nag) {
+				final Boolean prompt = guiUtils.getPersistentWarning(//
+						"The following data can only be saved in a <i>TRACES</i> file and will not be stored under the SWC format:"
+						+ "<ul>" //
+						+ "  <li>Image details</li>"//
+						+ "  <li>Fits and Fills</li>"//
+						+ "  <li>Path metadata (tags, colors, traced channel and frame)</li>"//
+						+ "  <li>Spine/varicosity counts</li>"//
+						+ "</ul>", "Warning: Possible Data Loss");
+				if (prompt == null)
+					return true; // user dimissed prompt
+				plugin.getPrefs().setTemp("dataloss-nag", !prompt.booleanValue());
+			}
+			return false;
 		}
 
 	}
@@ -4126,7 +4248,7 @@ public class SNTUI extends JDialog {
 		}
 	}
 
-	private class ActiveWorker extends SwingWorker<Object, Object> {
+	private static class ActiveWorker extends SwingWorker<Object, Object> {
 
 		@Override
 		protected Object doInBackground() throws Exception {
@@ -4165,13 +4287,89 @@ public class SNTUI extends JDialog {
 				if (filename.endsWith(".traces")) return ImportAction.TRACES;
 				if (filename.endsWith("swc")) return ImportAction.SWC;
 				if (filename.endsWith(".json")) return ImportAction.JSON;
+				if (filename.endsWith(".ndf")) return ImportAction.NDF;
 				if (filename.endsWith(".tif") || filename.endsWith(".tiff")) return ImportAction.IMAGE;
 				return -1;
 			}
 		});
 	}
 
+	private File getAutosaveFile() {
+		final String autosavePath = plugin.getPrefs().getTemp(SNTPrefs.AUTOSAVE_KEY, null);
+		return (autosavePath == null) ? null : new File(autosavePath);
+	}
+
+	private void setAutosaveFile(final File file) {
+		plugin.getPrefs().setTemp(SNTPrefs.AUTOSAVE_KEY,
+				(file != null && SNTUtils.fileAvailable(file)) ? file.getAbsolutePath() : null);
+	}
+
+	private void revertFromBackup() {
+		final File autosaveFile = getAutosaveFile();
+		if (autosaveFile == null) {
+			error("Current tracings have not been loaded from disk or the location of the data in the file system is not known."
+					+ " Please load backup tracings manually.");
+			return;
+		}
+		final List<File> copies = SNTUtils.getBackupCopies(autosaveFile); // list never null
+		if (copies == null || copies.isEmpty()) {
+			error("No time-stamped backups seem to exist for current data. Please create one first.");
+			return;
+		}
+		final HashMap<String, File> map = new HashMap<>(copies.size());
+		copies.forEach(cp -> map.put(SNTUtils.extractReadableTimeStamp(cp), cp));
+		final String[] choices = map.keySet().toArray(new String[0]);
+		final String choice = guiUtils.getChoice("Select timepoint for restore (current unsaved changes will be lost):",
+				"Revert to Saved State...", choices, choices[0]);
+		if (choice == null)
+			return; // user pressed cancel
+		plugin.loadTracesFile(map.get(choice));
+		if (guiUtils.getConfirmation(
+				"Data restored from snapshot backup. Shall this state now be saved to the main file, overriding its contents? "
+						+ "Alternatively, you can dismiss this prompt and save data manually later on.",
+				"Data Restored. Override Main File?", "Yes. Override main file.", "No. Do nothing.")) {
+			saveToXML(autosaveFile);
+		}
+	}
+
+	protected void saveToXML(boolean timeStampedCopy) {
+		if (noPathsError() || notReadyToSaveError()) return; // do not create empty files
+		boolean successfull = false;
+		File targetFile = getAutosaveFile();
+		if (timeStampedCopy) {
+			if (targetFile == null) {
+				if (guiUtils.getConfirmation(
+						"Traces must be saved at least once before a time-stamped backup is made. Save traces to main file now?",
+						"No Main File Exists")) {
+					saveToXML(false);
+				}
+				return;
+			}
+			final String suffix = SNTUtils.getTimeStamp();
+			final String fName = SNTUtils.stripExtension(targetFile.getName());
+			targetFile = new File(targetFile.getParentFile(), fName + suffix + ".traces");
+		}
+		try {
+			if (!timeStampedCopy && (targetFile == null || !targetFile.exists() || !targetFile.canWrite())) {
+				targetFile = saveFile("Save Traces As...", null, "traces");
+			}
+			if (targetFile != null)
+				successfull = saveToXML(targetFile);
+		} catch (final SecurityException ignored) {
+			// do nothing
+		}
+		if (successfull) {
+			SNTUtils.log(String.format("Saved to %s...", targetFile.getName()));
+			plugin.discreteMsg(String.format("Saved to %s...", targetFile.getName()));
+			if (!timeStampedCopy)
+				plugin.getPrefs().setTemp(SNTPrefs.AUTOSAVE_KEY, targetFile.getAbsolutePath());
+		} else {
+			plugin.discreteMsg("File could not be saved! Please use File> menu instead.");
+		}
+	}
+
 	protected boolean saveToXML(final File file) {
+		if (noPathsError()) return false; // do not create empty files
 		showStatus("Saving traces to " + file.getAbsolutePath(), false);
 
 		final int preSavingState = currentState;
@@ -4188,8 +4386,6 @@ public class SNTUI extends JDialog {
 		}
 		changeState(preSavingState);
 		showStatus("Saving completed.", true);
-
-		plugin.unsavedPaths = false;
 		return true;
 	}
 
@@ -4210,27 +4406,7 @@ public class SNTUI extends JDialog {
 				return false;
 		}
 		SNTUtils.log("Exporting paths... " + prefix);
-		final boolean success = pathAndFillManager.exportAllPathsAsSWC(primaryPaths, filePath);
-		plugin.unsavedPaths = !success;
-		return success;
-	}
-
-	private boolean abortOnPutativeDataLoss() {
-		boolean nag = plugin.getPrefs().getTemp("dataloss-nag", true);
-		if (nag) {
-			final Boolean prompt = guiUtils.getPersistentWarning(//
-					"The following data can only be saved in a <i>TRACES</i> file and will not be stored in SWC files:"
-					+ "<ul>" //
-					+ "  <li>Image details</li>"//
-					+ "  <li>Fits and Fills</li>"//
-					+ "  <li>Path metadata (tags, colors, traced channel and frame)</li>"//
-					+ "  <li>Spine/varicosity counts</li>"//
-					+ "</ul>", "Warning: Possible Data Loss");
-			if (prompt == null)
-				return true; // user dimissed prompt
-			plugin.getPrefs().setTemp("dataloss-nag", !prompt.booleanValue());
-		}
-		return false;
+		return pathAndFillManager.exportAllPathsAsSWC(primaryPaths, filePath);
 	}
 
 	private class ImportAction {
@@ -4255,7 +4431,7 @@ public class SNTUI extends JDialog {
 
 		private void run() {
 			if (getState() != READY && getState() != TRACING_PAUSED) {
-				guiUtils.blinkingError(statusText, "Please exit current state before importing file(s).");
+				guiUtils.blinkingError(statusText, "Please exit current state before importing data.");
 				return;
 			}
 			if (!proceed()) return;
@@ -4267,83 +4443,42 @@ public class SNTUI extends JDialog {
 				(new DynamicCmdRunner(SkeletonConverterCmd.class, inputs, RUNNING_CMD)).run();
 				break;
 			case DEMO:
-				changeState(LOADING);
-				showStatus("Retrieving demo data. Please wait...", false);
-				final String[] choices = new String[6];
-				choices[0] = "Drosophila ddaC neuron (581K, 2D, binary, auto-trace demo)";
-				choices[1] = "Drosophila ddaC neuron (581K, 2D, binary, image only)";
-				choices[2] = "Drosophila OP neuron (15MB, 3D, grayscale, w/ tracings)";
-				choices[3] = "Hippocampal neuron (2.5MB, 2D, multichannel)";
-				choices[4] = "Hippocampal neuron (52MB, timelapse, w/ tracings)";
-				choices[5] = "L-systems fractal (23K, 2D, binary, w/ tracings & markers)";
-				final String defChoice = plugin.getPrefs().getTemp("demo", choices[5]);
-				final String choice = guiUtils.getChoice("Which dataset?<br>(NB: Remote data may take a while to download)", "Load Demo Dataset", choices, defChoice);
+				final DemoRunner demoRunner = new DemoRunner(SNTUI.this, plugin);
+				if (file != null) { // recorded command
+					try (final Scanner scanner = new Scanner(file.getName())) {
+						demoRunner.load(scanner.useDelimiter("\\D+").nextInt());
+						return;
+					} catch (final NoSuchElementException | IllegalStateException | IllegalArgumentException ex) {
+						throw new IllegalArgumentException ("Invalid recorded option " + ex.getMessage());
+					}
+				}
+				final Demo choice = demoRunner.getChoice();
 				if (choice == null) {
 					changeState(priorState);
 					showStatus(null, true);
 					return;
 				}
-				try {
-
-					// Remember choice for subsequent runs
-					plugin.getPrefs().setTemp("demo", choice);
-
-					// Suppress the 'auto-tracing' prompt for this image. This
-					// will be reset once SNT initializes with the new data
-					plugin.getPrefs().setTemp("autotracing-prompt-armed", false);
-
-					final SNTService sntService = plugin.getContext().getService(SNTService.class);
-					final ImagePlus imp = sntService.demoImage(choice);
-					if (imp == null) {
-						error("Image could not be retrieved. Perhaps and internet connection is required but you are offline?");
-						changeState(priorState);
-						return;
-					}
-					plugin.initialize(imp);
-					if (pathAndFillManager.size() > 0
-							&& guiUtils.getConfirmation("Clear Existing Path(s)?", "Delete All Paths")) {
-						pathAndFillManager.clear();
-					}
-					if (choices[0].equals(choice)) {
-						imp.setRoi(320, 380, 20, 20); // mark soma in ddaC image
-						inputs.put("simplifyPrompt", true);
-						(new DynamicCmdRunner(SkeletonConverterCmd.class, inputs, RUNNING_CMD)).run();
-					} else if (choices[5].equals(choice)) {
-						plugin.getPathAndFillManager().addTree(sntService.demoTree("fractal"));
-						plugin.getPathAndFillManager().assignSpatialSettings(imp);
-					} else if (choices[4].equals(choice)) {
-						sntService.loadTracings("timelapse demo");
-					} else if (choices[2].equals(choice)) {
-						plugin.getStats().min = 0;
-						plugin.getStats().max = 255;
-						sntService.loadTracings("OP1 demo");
-					}
-					plugin.updateAllViewers();
-
-				} catch (final Throwable ex) {
-					error("Loading of image failed (" + ex.getMessage() + " error). See Console for details.");
-					ex.printStackTrace();
-				} finally {
-					changeState(priorState);
-					showStatus(null, true);
-				}
-				return;
+				// Suppress the 'auto-tracing' prompt for this image. This
+				// will be reset once SNT initializes with the new data
+				plugin.getPrefs().setTemp("autotracing-prompt-armed", false);
+				choice.load(); // will reset UI
+				break;
 			case IMAGE:
 				if (file != null) inputs.put("file", file);
 				(new DynamicCmdRunner(OpenDatasetCmd.class, inputs, LOADING)).run();
-				return;
+				break;
 			case JSON:
 				if (file != null) inputs.put("file", file);
 				(new DynamicCmdRunner(JSONImporterCmd.class, inputs, LOADING)).run();
-				return;
+				break;
 			case NDF:
 				if (file != null) inputs.put("file", file);
 				(new DynamicCmdRunner(NDFImporterCmd.class, inputs, LOADING)).run();
-				return;
+				break;
 			case SWC_DIR:
 				if (file != null) inputs.put("dir", file);
 				(new DynamicCmdRunner(MultiSWCImporterCmd.class, inputs, LOADING)).run();
-				return;
+				break;
 			case TRACES:
 			case SWC:
 			case ANY_RECONSTRUCTION:
@@ -4352,20 +4487,24 @@ public class SNTUI extends JDialog {
 					plugin.loadSWCFile(file);
 				} else if (type == TRACES){
 					plugin.loadTracesFile(file);
+					setAutosaveFile(file);
 				} else if (type == ANY_RECONSTRUCTION){
-					if (file == null) file = openFile("Open Reconstruction File (Guessing Type)...", "swc");
+					if (file == null) file = openReconstructionFile(null);
 					if (file != null) plugin.loadTracings(file);
 				}
 				validateImgDimensions();
 				changeState(priorState);
-				return;
+				break;
 			default:
 				throw new IllegalArgumentException("Unknown action");
 			}
+			if (file != null && recorder != null)
+				recorder.recordComment("Detected option: \"" + file.getAbsolutePath() + "\"");
+
 		}
 
 		private boolean proceed() {
-			return !plugin.isChangesUnsaved() || (plugin.isChangesUnsaved() && guiUtils.getConfirmation(
+			return !plugin.isUnsavedChanges() || (plugin.isUnsavedChanges() && guiUtils.getConfirmation(
 					"There are unsaved paths. Do you really want to load new data?", "Proceed with Import?"));
 		}
 	}
@@ -4380,6 +4519,21 @@ public class SNTUI extends JDialog {
 				plugin.flushSecondaryData();
 			}
 		}
+	}
+
+	public ScriptRecorder getRecorder(final boolean createIfNeeded) {
+		if (recorder == null && createIfNeeded) {
+			recorder = new ScriptRecorder();
+			commandFinder.setRecorder(recorder);
+			recorder.addWindowListener(new WindowAdapter() {
+				@Override
+				public void windowClosed(final WindowEvent e) {
+					recorder = null;
+					commandFinder.setRecorder(null);
+				}
+			});
+		}
+		return recorder;
 	}
 
 }

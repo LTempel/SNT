@@ -2,7 +2,7 @@
  * #%L
  * Fiji distribution of ImageJ for the life sciences.
  * %%
- * Copyright (C) 2010 - 2022 Fiji developers.
+ * Copyright (C) 2010 - 2023 Fiji developers.
  * %%
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as
@@ -21,14 +21,7 @@
  */
 package sc.fiji.snt.analysis.sholl;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Properties;
-import java.util.Set;
-import java.util.SortedSet;
-import java.util.TreeSet;
+import java.util.*;
 
 import ij.ImagePlus;
 import ij.gui.Overlay;
@@ -176,20 +169,11 @@ public class Profile implements ProfileProperties {
 	}
 
 	public void trimZeroCounts() {
-		final Iterator<ProfileEntry> iter = profile.iterator();
-		while (iter.hasNext()) {
-			final ProfileEntry entry = iter.next();
-			if (entry.radius == 0 || entry.count == 0)
-				iter.remove();
-		}
+		profile.removeIf(entry -> entry.radius == 0 || entry.count == 0);
 	}
 
 	public void trimNaNCounts() {
-		final Iterator<ProfileEntry> iter = profile.iterator();
-		while (iter.hasNext()) {
-			if (Double.isNaN(iter.next().count))
-				iter.remove();
-		}
+		profile.removeIf(profileEntry -> Double.isNaN(profileEntry.count));
 	}
 
 	public void scale(final double xScale, final double yScale, final double zScale) {
@@ -274,10 +258,7 @@ public class Profile implements ProfileProperties {
 	}
 
 	private static ArrayList<Number> arrayToList(final Number[] array) {
-		final ArrayList<Number> list = new ArrayList<>();
-		for (final Number i : array)
-			list.add(i);
-		return list;
+		return new ArrayList<>(Arrays.asList(array));
 	}
 
 	public int size() {
@@ -349,9 +330,9 @@ public class Profile implements ProfileProperties {
 
 		// Calibration
 		final String[] calLines = properties.getProperty(KEY_CALIBRATION, UNSET).split(",");
-		final Double vx = Double.parseDouble(getCalibrationValue(calLines, "w="));
-		final Double vy = Double.parseDouble(getCalibrationValue(calLines, "h="));
-		final Double vz = Double.parseDouble(getCalibrationValue(calLines, "d="));
+		final double vx = Double.parseDouble(getCalibrationValue(calLines, "w="));
+		final double vy = Double.parseDouble(getCalibrationValue(calLines, "h="));
+		final double vz = Double.parseDouble(getCalibrationValue(calLines, "d="));
 		final String unit = getCalibrationValue(calLines, "unit=");
 		cal = new Calibration();
 		cal.setUnit(unit);

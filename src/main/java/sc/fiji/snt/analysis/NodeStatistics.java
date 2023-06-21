@@ -2,7 +2,7 @@
  * #%L
  * Fiji distribution of ImageJ for the life sciences.
  * %%
- * Copyright (C) 2010 - 2022 Fiji developers.
+ * Copyright (C) 2010 - 2023 Fiji developers.
  * %%
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as
@@ -193,9 +193,8 @@ public class NodeStatistics <T extends PointInImage> {
 	public SNTChart getHistogram(final String metric) {
 		getDescriptiveStatistics(metric);
 		final HistogramDatasetPlus datasetPlus = new HistogramDatasetPlus(currentStats, true);
-		final JFreeChart chart = AnalysisUtils.createHistogram(currentMetric, currentStats, datasetPlus);
-		final SNTChart frame = new SNTChart("Hist. " + currentMetric, chart);
-		return frame;
+		final JFreeChart chart = AnalysisUtils.createHistogram(currentMetric, "", currentStats, datasetPlus);
+		return new SNTChart("Hist. " + currentMetric, chart);
 	}
 
 	/**
@@ -266,11 +265,7 @@ public class NodeStatistics <T extends PointInImage> {
 					mappingAnnotation = pAnnotation;
 				}
 			}
-			Set<T> currentList = map.get(mappingAnnotation);
-			if (currentList == null) {
-				currentList = new HashSet<T>();
-				map.put(mappingAnnotation, currentList);
-			}
+			Set<T> currentList = map.computeIfAbsent(mappingAnnotation, k -> new HashSet<T>());
 			currentList.add(p);
 		}
 	
@@ -390,23 +385,27 @@ public class NodeStatistics <T extends PointInImage> {
 	 */
 	public SNTChart getAnnotatedHistogram(final int depth) {
 		final Map<BrainAnnotation, Integer> map = getAnnotatedFrequencies(depth);
+		Map<BrainAnnotation, Integer> undefinedNodeMap = new HashMap<>();
 		final DefaultCategoryDataset dataset = new DefaultCategoryDataset();
 		final String seriesLabel = (depth == Integer.MAX_VALUE) ? "no filtering" : "depth \u2264" + depth;
 		map.entrySet().stream().sorted((e1, e2) -> -e1.getValue().compareTo(e2.getValue())).forEach(entry -> {
-			if (entry.getKey() != null)
-					dataset.addValue(entry.getValue(), seriesLabel, entry.getKey().acronym());
+			if (entry.getKey() == null || entry.getKey().getOntologyDepth() == 0) {
+				// a null brain annotation or the root brain itself
+				undefinedNodeMap.put(entry.getKey(), entry.getValue());
+			} else
+				dataset.addValue(entry.getValue(), seriesLabel, entry.getKey().acronym());
 		});
-		int nAreas = map.size();
-		if (map.get(null) != null) {
-			dataset.addValue(map.get(null), seriesLabel,"Other" );
-			nAreas--;
+		if (!undefinedNodeMap.isEmpty()) {
+			undefinedNodeMap.forEach((k, v) -> {
+				dataset.addValue(v, seriesLabel, BrainAnnotation.simplifiedString(k));
+			});
 		}
 		final JFreeChart chart = AnalysisUtils.createCategoryPlot( //
-				"Brain areas (N=" + nAreas + ", "+ seriesLabel +")", // domain axis title
+				"Brain areas (N=" + (map.size() - undefinedNodeMap.size()) + ", "+ seriesLabel +")", // domain axis title
 				"Frequency", // range axis title
+				"", //unit
 				dataset);
-		final SNTChart frame = new SNTChart(getLabel() + " Annotated Node Distribution", chart, new Dimension(400, 600));
-		return frame;
+		return new SNTChart(getLabel() + " Annotated Node Distribution", chart, new Dimension(400, 600));
 	}
 
 	/**
@@ -461,9 +460,9 @@ public class NodeStatistics <T extends PointInImage> {
 		final JFreeChart chart = AnalysisUtils.createCategoryPlot( //
 				"Brain areas (N=" + nAreas + ", "+ axisTitle +")", // domain axis title
 				"Frequency", // range axis title
+				"", // axis unit (not applicable here)
 				dataset, 2);
-		final SNTChart frame = new SNTChart(getLabel() + " Annotated Frequencies", chart, new Dimension(400, 600));
-		return frame;
+		return new SNTChart(getLabel() + " Annotated Frequencies", chart, new Dimension(400, 600));
 	}
 
 	private SNTChart getAnnotatedFrequencyHistogram(final Map<BrainAnnotation, Integer> map, final int depth, final String secondaryLabel) {
@@ -481,6 +480,7 @@ public class NodeStatistics <T extends PointInImage> {
 		final JFreeChart chart = AnalysisUtils.createCategoryPlot( //
 				"Brain areas (N=" + nAreas + ", "+ seriesLabel +")", // domain axis title
 				"Frequency", // range axis title
+				"", // unit
 				dataset);
 		final SNTChart frame = new SNTChart(getLabel() + " Annotated Frequencies", chart, new Dimension(400, 600));
 		if (secondaryLabel != null) frame.annotate(secondaryLabel);

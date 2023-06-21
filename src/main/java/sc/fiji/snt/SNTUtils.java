@@ -2,7 +2,7 @@
  * #%L
  * Fiji distribution of ImageJ for the life sciences.
  * %%
- * Copyright (C) 2010 - 2022 Fiji developers.
+ * Copyright (C) 2010 - 2023 Fiji developers.
  * %%
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as
@@ -36,8 +36,10 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Paths;
 import java.text.DecimalFormat;
 import java.text.NumberFormat;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
@@ -45,12 +47,28 @@ import java.util.Random;
 import java.util.concurrent.TimeUnit;
 import java.util.jar.Attributes;
 import java.util.jar.Manifest;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import org.scijava.Context;
+import org.scijava.app.StatusService;
+import org.scijava.batch.BatchService;
+import org.scijava.command.CommandService;
+import org.scijava.convert.ConvertService;
+import org.scijava.display.DisplayService;
+import org.scijava.io.IOService;
 import org.scijava.log.LogService;
+import org.scijava.platform.PlatformService;
+import org.scijava.plot.PlotService;
+import org.scijava.prefs.PrefService;
+import org.scijava.script.ScriptHeaderService;
+import org.scijava.script.ScriptService;
 import org.scijava.table.Table;
+import org.scijava.table.io.TableIOService;
+import org.scijava.thread.ThreadService;
 import org.scijava.ui.UIService;
 import org.scijava.ui.console.ConsolePane;
+import org.scijava.ui.swing.script.LanguageSupportService;
 import org.scijava.util.FileUtils;
 import org.scijava.util.VersionUtils;
 
@@ -64,6 +82,10 @@ import ij.plugin.ZProjector;
 import ij.process.ImageConverter;
 import ij.process.LUT;
 import ij.process.StackConverter;
+import io.scif.services.DatasetIOService;
+import net.imagej.display.ImageDisplayService;
+import net.imagej.lut.LUTService;
+import net.imagej.ops.OpService;
 import net.imglib2.display.ColorTable;
 import sc.fiji.snt.analysis.sholl.ShollUtils;
 import sc.fiji.snt.gui.GuiUtils;
@@ -73,6 +95,12 @@ import sc.fiji.snt.viewer.Viewer3D;
 /** Static utilities for SNT **/
 public class SNTUtils {
 
+	/*
+	 * NB: This pattern needs to be OS agnostic: I.e., Microsoft Windows does not
+	 * support colons in filenames
+	 */
+	private static final String TIMESTAMP_PATTERN = "'_D'yyyy-MM-dd'T'HH-mm-ss";
+	private static final String TIMESTAMP_REGEX = "(.+?)_D(\\d{4}-\\d{2}-\\d{2})T(\\d{2}-\\d{2}-\\d{2})";
 	private static Context context;
 	private static LogService logService;
 
@@ -104,7 +132,11 @@ public class SNTUtils {
 	 *
 	 */
 	private static String getVersion() {
-		return VersionUtils.getVersion(SNT.class);
+		try {
+			return VersionUtils.getVersion(SNT.class);
+		} catch (final Exception | Error ignored) {
+			return "N/A";
+		}
 	}
 
 	public static synchronized void addViewer(final Viewer3D viewer) {
@@ -520,7 +552,7 @@ public class SNTUtils {
 	 * @param pattern the filename substring (case-sensitive) to be matched. Only
 	 *                filenames containing {@code pattern} will be imported from the
 	 *                directory. {@code null} allowed.
-	 * @return the list of files. An empty list is retrieved if {@code dir} is not a
+	 * @return the array of files. An empty list is retrieved if {@code dir} is not a
 	 *         valid, readable directory.
 	 */
 	public static File[] getReconstructionFiles(final File dir, final String pattern) {
@@ -532,10 +564,59 @@ public class SNTUtils {
 			final String name = file.getName();
 			if (!name.contains(validatedPattern))
 				return false;
-			final String lName = name.toLowerCase();
-			return file.canRead() && (lName.endsWith("swc") || lName.endsWith(".traces") || lName.endsWith(".json"));
+			return file.canRead() && isReconstructionFile(file);
 		};
 		return dir.listFiles(filter);
+	}
+
+	public static boolean isReconstructionFile(final File file) {
+		final String lName = file.getName().toLowerCase();
+		return (lName.endsWith("swc") || lName.endsWith(".traces") || lName.endsWith(".json") || lName.endsWith(".ndf"));
+	}
+
+	/**
+	 * Retrieves a list of time-stamped backup files associated with a TRACES file
+	 *
+	 * @param tracesFile the TRACES file
+	 * @return the list of backup files. An empty list is retrieved if none could be
+	 *         found.
+	 */
+	public static List<File> getBackupCopies(final File tracesFile) {
+		final List<File> copies = new ArrayList<>();
+		if (tracesFile == null)
+			return copies;
+		final File dir = tracesFile.getParentFile();
+		if (dir == null || !dir.isDirectory() || !dir.exists() || !dir.canRead()) {
+			return copies;
+		}
+		final File[] candidates = getReconstructionFiles(dir, stripExtension(tracesFile.getName()));
+		if (candidates == null)
+			return copies;
+		Pattern p = Pattern.compile(SNTUtils.TIMESTAMP_REGEX);
+		for (final File candidate : candidates) {
+			try {
+				if (p.matcher(candidate.getName()).find())
+					copies.add(candidate);
+			} catch (final Exception ignored) {
+				// do nothing
+				ignored.printStackTrace();
+			}
+		}
+		return copies;
+	}
+
+	public static String getTimeStamp() {
+		return new SimpleDateFormat(TIMESTAMP_PATTERN).format(new Date());
+	}
+
+	public static String extractReadableTimeStamp(final File file) {
+		final Pattern p = Pattern.compile(SNTUtils.TIMESTAMP_REGEX);
+		final Matcher m = p.matcher(file.getName());
+		if (m.find()) {
+			// NB: m.group(0) returns the full match
+			return m.group(1) + " " + m.group(2) + " " + m.group(3).replace("-", ":");
+		}
+		return file.getName();
 	}
 
 	public static void setIsLoading(boolean isLoading) {
@@ -558,8 +639,42 @@ public class SNTUtils {
 			} catch (final Exception | Error ignored) {
 				error("Failed to retrieve context from IJ1", ignored);
 			} finally {
-				if (context == null)
-					context = new Context();
+				if (context == null) {
+					try {
+						context = new Context();
+					} catch (final Exception e) {
+						System.out.println("SciJava context could not be initialized properly [" + e.getMessage()
+								+ "] Some services may not be available!");
+						// FIXME: When running SNT outside IJ, LegacyService fails to initialize!?
+						// We'll try to initialize a context with the most common services needed by SNT
+						// skipping the problematic ones
+						context = new Context(//
+								// ImageJService.class, // Invalid service: net.imagej.legacy.LegacyService
+								// LegacyService.class, // Invalid service: net.imagej.legacy.LegacyService
+								BatchService.class, //
+								CommandService.class, //
+								ConvertService.class, //
+								DatasetIOService.class, //
+								DisplayService.class, //
+								ImageDisplayService.class, //
+								IOService.class, //
+								LanguageSupportService.class, //
+								LogService.class, //
+								LUTService.class, //
+								OpService.class, //
+								PlatformService.class, //
+								PlotService.class, //
+								PrefService.class, //
+								ScriptHeaderService.class, //
+								ScriptService.class, //
+								SNTService.class, //
+								StatusService.class, //
+								TableIOService.class, //
+								ThreadService.class, //
+								UIService.class //
+						);
+					}
+				}
 			}
 		}
 		return context;

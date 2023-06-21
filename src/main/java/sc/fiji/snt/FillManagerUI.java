@@ -2,7 +2,7 @@
  * #%L
  * Fiji distribution of ImageJ for the life sciences.
  * %%
- * Copyright (C) 2010 - 2022 Fiji developers.
+ * Copyright (C) 2010 - 2023 Fiji developers.
  * %%
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as
@@ -103,6 +103,7 @@ public class FillManagerUI extends JDialog implements PathAndFillListener,
 	 */
 	public FillManagerUI(final SNT plugin) {
 		super(plugin.getUI(), "Fill Manager");
+		getRootPane().putClientProperty("JRootPane.menuBarEmbedded", false);
 
 		this.plugin = plugin;
 		pathAndFillManager = plugin.getPathAndFillManager();
@@ -661,7 +662,7 @@ public class FillManagerUI extends JDialog implements PathAndFillListener,
 			return;
 		}
 
-		final File saveFile = plugin.getUI().saveFile("Export CSV Summary...", "Fills.csv", ".csv");
+		final File saveFile = plugin.getUI().saveFile("Export CSV Summary...", "Fills.csv", "csv");
 		if (saveFile == null) return; // user pressed cancel;
 		plugin.getUI().showStatus("Exporting CSV data to " + saveFile
 			.getAbsolutePath(), false);

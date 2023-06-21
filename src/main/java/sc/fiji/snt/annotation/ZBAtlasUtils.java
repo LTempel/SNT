@@ -2,7 +2,7 @@
  * #%L
  * Fiji distribution of ImageJ for the life sciences.
  * %%
- * Copyright (C) 2010 - 2022 Fiji developers.
+ * Copyright (C) 2010 - 2023 Fiji developers.
  * %%
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as
@@ -29,6 +29,7 @@ import org.scijava.util.Colors;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
 import okhttp3.Response;
+import sc.fiji.snt.gui.GuiUtils;
 import sc.fiji.snt.util.PointInImage;
 import sc.fiji.snt.util.SNTPoint;
 import sc.fiji.snt.viewer.OBJMesh;
@@ -94,7 +95,7 @@ public class ZBAtlasUtils {
 		final URL url = loader.getResource(meshPath);
 		if (url == null)
 			throw new IllegalArgumentException(meshLabel + " not found");
-		final OBJMesh mesh = new OBJMesh(url, "um");
+		final OBJMesh mesh = new OBJMesh(url, GuiUtils.micrometer());
 		mesh.setColor(Colors.WHITE, 95f);
 		mesh.setLabel(meshLabel);
 		return mesh;

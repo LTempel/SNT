@@ -2,7 +2,7 @@
  * #%L
  * Fiji distribution of ImageJ for the life sciences.
  * %%
- * Copyright (C) 2010 - 2022 Fiji developers.
+ * Copyright (C) 2010 - 2023 Fiji developers.
  * %%
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as
@@ -85,7 +85,6 @@ public class MeasureUI extends JFrame {
 	public MeasureUI(final Collection<Tree> trees) {
 		this(SNTUtils.getContext(), trees);
 		lastDirPath = System.getProperty("user.home");
-		setLocationRelativeTo(null);
 	}
 
 	public MeasureUI(final SNT plugin, final Collection<Tree> trees) {
@@ -97,7 +96,6 @@ public class MeasureUI extends JFrame {
 			// SNTUI#getTable() without the need of sntService. This
 			// may cause problems if multiple instances are running
 			setTable(sntService.getTable());
-			setLocationRelativeTo(plugin.getUI());
 		}
 	}
 
@@ -131,6 +129,7 @@ public class MeasureUI extends JFrame {
 	@Override
 	public void setVisible(final boolean b) {
 		// Script friendly version
+		setLocationRelativeTo((plugin == null) ? null : plugin.getUI());
 		SwingUtilities.invokeLater(() -> super.setVisible(b));
 	}
 
@@ -160,8 +159,7 @@ public class MeasureUI extends JFrame {
 			return;
 		}
 		final File dir = (lastDirPath == null) ? new File(System.getProperty("user.home")) : new File(lastDirPath);
-		final File out = guiUtils.saveFile("Save Table", new File(dir, "SNT_Measurements.csv"),
-				Arrays.asList(".csv"));
+		final File out = guiUtils.getSaveFile("Save Table", new File(dir, "SNT_Measurements.csv"), "csv");
 		if (out == null)
 			return;
 		try {

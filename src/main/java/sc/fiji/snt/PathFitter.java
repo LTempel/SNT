@@ -2,7 +2,7 @@
  * #%L
  * Fiji distribution of ImageJ for the life sciences.
  * %%
- * Copyright (C) 2010 - 2022 Fiji developers.
+ * Copyright (C) 2010 - 2023 Fiji developers.
  * %%
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as
@@ -589,7 +589,7 @@ public class PathFitter implements Callable<Path> {
 				final boolean goneTooFar = i -
 					lastValidIndex >= Path.noMoreThanOneEvery;
 				boolean nextValid = false;
-				if (i < (totalPoints - 1)) if (valid[i + 1]) nextValid = true;
+				if (i < (totalPoints - 1) &&  (valid[i + 1])) nextValid = true;
 
 				if ((goneTooFar && !nextValid) || firstOrLast) {
 					valid[i] = true;
@@ -961,7 +961,7 @@ public class PathFitter implements Callable<Path> {
 		this.img = img;
 	}
 
-	private class CircleAttempt implements MultivariateFunction,
+	private static class CircleAttempt implements MultivariateFunction,
 		Comparable<CircleAttempt>
 	{
 

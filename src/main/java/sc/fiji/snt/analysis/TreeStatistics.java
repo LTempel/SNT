@@ -2,7 +2,7 @@
  * #%L
  * Fiji distribution of ImageJ for the life sciences.
  * %%
- * Copyright (C) 2010 - 2022 Fiji developers.
+ * Copyright (C) 2010 - 2023 Fiji developers.
  * %%
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as
@@ -25,6 +25,7 @@ package sc.fiji.snt.analysis;
 import java.awt.Dimension;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
@@ -80,9 +81,9 @@ public class TreeStatistics extends TreeAnalyzer {
 	/** Flag for {@value #PATH_FRAME} statistics. */
 	public static final String PATH_FRAME = "Path frame";
 	/** Flag for {@value #INTER_NODE_DISTANCE} statistics. */
-	public static final String INTER_NODE_DISTANCE = "Inter-node distance";
+	public static final String INTER_NODE_DISTANCE = "Internode distance";
 	/** Flag for {@value #INTER_NODE_DISTANCE_SQUARED} statistics. */
-	public static final String INTER_NODE_DISTANCE_SQUARED = "Inter-node distance (squared)";
+	public static final String INTER_NODE_DISTANCE_SQUARED = "Internode distance (squared)";
 	/** Flag for {@value #N_BRANCH_POINTS} statistics. */
 	public static final String N_BRANCH_POINTS = "No. of branch points";
 	/** Flag for {@value #N_NODES} statistics. */
@@ -169,7 +170,7 @@ public class TreeStatistics extends TreeAnalyzer {
 	public static final String SHOLL_N_SECONDARY_MAX = "Sholl: " + ShollAnalyzer.N_SECONDARY_MAX;
 	/** Flag specifying {@value #SHOLL_DECAY} statistics */
 	public static final String SHOLL_DECAY = "Sholl: " + ShollAnalyzer.DECAY;
-	/** Flag specifying {@value #MAX_FITTED} statistics */
+	/** Flag specifying {@value #SHOLL_MAX_FITTED} statistics */
 	public static final String SHOLL_MAX_FITTED = "Sholl: " + ShollAnalyzer.MAX_FITTED;
 	/** Flag specifying {@value #SHOLL_MAX_FITTED_RADIUS} statistics */
 	public static final String SHOLL_MAX_FITTED_RADIUS = "Sholl: " + ShollAnalyzer.MAX_FITTED_RADIUS;
@@ -212,7 +213,7 @@ public class TreeStatistics extends TreeAnalyzer {
 	@Deprecated
 	public static final String MEAN_RADIUS = PATH_MEAN_RADIUS;
 
-	/** @deprecated  Use {@link #PATH_MEAN_SPINE_DENSITY} instead */
+	/** @deprecated  Use {@link #PATH_SPINE_DENSITY} instead */
 	@Deprecated
 	public static final String AVG_SPINE_DENSITY = "Average spine/varicosity density";
 
@@ -260,7 +261,8 @@ public class TreeStatistics extends TreeAnalyzer {
 	 *
 	 * @param type the type. Either 'legacy' (metrics supported up to SNTv4.0.5),
 	 *             "safe" (metrics that can be computed from invalid graphs) or
-	 *             'common' (commonly used metrics"
+	 *             'common' (commonly used metrics) or 'quick' (used by the 'quick
+	 *             measure' GUI commands).
 	 * @return the list metrics
 	 */
 	public static List<String> getMetrics(final String type) {
@@ -293,6 +295,27 @@ public class TreeStatistics extends TreeAnalyzer {
 					PARTITION_ASYMMETRY, PRIMARY_LENGTH, REMOTE_BIF_ANGLES, SHOLL_DECAY, SHOLL_MAX_VALUE,
 					SHOLL_MAX_FITTED, SHOLL_MAX_FITTED_RADIUS, SHOLL_MEAN_VALUE, SURFACE_AREA, STRAHLER_NUMBER,
 					TERMINAL_LENGTH, VALUES, VOLUME, X_COORDINATES, Y_COORDINATES, Z_COORDINATES };
+			break;
+		case "quick":
+			/* NB: This list can only include metrics supported by #getMetricWithoutChecks() */
+			metrics = new String[] { //
+					LENGTH, MultiTreeStatistics.AVG_BRANCH_LENGTH, N_BRANCH_POINTS, N_TIPS, N_BRANCHES, //
+					N_PRIMARY_BRANCHES, N_TERMINAL_BRANCHES, //
+					PATH_MEAN_RADIUS, //
+					AVG_SPINE_DENSITY, //
+					STRAHLER_NUMBER, MultiTreeStatistics.HIGHEST_PATH_ORDER,
+					/* Disabled metrics (likely too specific or uncommon for most users) */
+					// MultiTreeStatistics.ASSIGNED_VALUE, MultiTreeStatistics.AVG_CONTRACTION,
+					// MultiTreeStatistics.AVG_FRACTAL_DIMENSION,
+					// MultiTreeStatistics.AVG_FRAGMENTATION,
+					// MultiTreeStatistics.AVG_REMOTE_ANGLE,
+					// MultiTreeStatistics.AVG_PARTITION_ASYMMETRY,
+					// PRIMARY_LENGTH, INNER_LENGTH, TERMINAL_LENGTH,
+					// N_INNER_BRANCHES,
+					// N_FITTED_PATHS, N_PATHS, N_NODES,
+					// WIDTH, HEIGHT, DEPTH,
+					// SHOLL_DECAY, SHOLL_MAX_VALUE,
+			};
 			break;
 		default:
 			throw new IllegalArgumentException("Unrecognized type");
@@ -493,45 +516,55 @@ public class TreeStatistics extends TreeAnalyzer {
 	protected SNTChart getAnnotatedLengthsByHemisphereHistogram(int depth) {
 		final DefaultCategoryDataset dataset = new DefaultCategoryDataset();
 		Map<BrainAnnotation, double[]> seriesMap = getAnnotatedLengthsByHemisphere(depth);
+		Map<BrainAnnotation, double[]> undefinedLengthMap = new HashMap<>();
 		seriesMap.entrySet().stream().sorted((e1, e2) -> -Double.compare(e1.getValue()[0], e2.getValue()[0]))
 				.forEach(entry -> {
-					if (entry.getKey() != null) {
+					if (entry.getKey() == null || entry.getKey().getOntologyDepth() == 0) {
+						// a null brain annotation or the root brain itself
+						undefinedLengthMap.put(entry.getKey(), entry.getValue());
+					} else {
 						dataset.addValue(entry.getValue()[0], "Ipsilateral", entry.getKey().acronym());
 						dataset.addValue(entry.getValue()[1], "Contralateral", entry.getKey().acronym());
 					}
 				});
-		int nAreas = seriesMap.size();
-		if (seriesMap.get(null) != null) {
-			dataset.addValue(seriesMap.get(null)[0], "Ipsilateral", "Other");
-			dataset.addValue(seriesMap.get(null)[1], "Contralateral", "Other");
-			nAreas--;
+
+		if (!undefinedLengthMap.isEmpty()) {
+			undefinedLengthMap.forEach( (k, v) -> {
+				dataset.addValue(v[0], "Ipsilateral", BrainAnnotation.simplifiedString(k));
+				dataset.addValue(v[1], "Contralateral", BrainAnnotation.simplifiedString(k));
+			});
 		}
 		final String axisTitle = (depth == Integer.MAX_VALUE) ? "no filtering" : "depth \u2264" + depth;
 		final JFreeChart chart = AnalysisUtils.createCategoryPlot( //
-				"Brain areas (N=" + nAreas + ", " + axisTitle + ")", // domain axis title
-				"Cable length", // range axis title
+				"Brain areas (N=" + (seriesMap.size() - undefinedLengthMap.size()) + ", " + axisTitle + ")", // domain axis title
+				String.format("Cable length (%s)", getUnit()), // range axis title
+				"", // axis unit (already applied)
 				dataset, 2);
 		final String tLabel = (tree.getLabel() == null) ? "" : tree.getLabel();
-		final SNTChart frame = new SNTChart(tLabel + " Annotated Length", chart, new Dimension(400, 600));
-		return frame;
+		return new SNTChart(tLabel + " Annotated Length", chart, new Dimension(400, 600));
 	}
 
 	protected SNTChart getAnnotatedLengthHistogram(final Map<BrainAnnotation, Double> map, final int depth,
 			final String secondaryLabel) {
 		final DefaultCategoryDataset dataset = new DefaultCategoryDataset();
+		Map<BrainAnnotation, Double> undefinedLengthMap = new HashMap<>();
 		final String seriesLabel = (depth == Integer.MAX_VALUE) ? "no filtering" : "depth \u2264" + depth;
 		map.entrySet().stream().sorted((e1, e2) -> -e1.getValue().compareTo(e2.getValue())).forEach(entry -> {
-			if (entry.getKey() != null)
+			if (entry.getKey() == null || entry.getKey().getOntologyDepth() == 0) {
+				// a null brain annotation or the root brain itself
+				undefinedLengthMap.put(entry.getKey(), entry.getValue());
+			} else
 				dataset.addValue(entry.getValue(), seriesLabel, entry.getKey().acronym());
 		});
-		int nAreas = map.size();
-		if (map.get(null) != null) {
-			dataset.addValue(map.get(null), seriesLabel, "Other");
-			nAreas--;
+		if (!undefinedLengthMap.isEmpty()) {
+			undefinedLengthMap.forEach( (k, v) -> {
+				dataset.addValue(v, seriesLabel, BrainAnnotation.simplifiedString(k));
+			});
 		}
 		final JFreeChart chart = AnalysisUtils.createCategoryPlot( //
-				"Brain areas (N=" + nAreas + ", " + seriesLabel + ")", // domain axis title
-				"Cable length", // range axis title
+				"Brain areas (N=" + (map.size()-undefinedLengthMap.size()) + ", " + seriesLabel + ")", // domain axis title
+				String.format("Cable length (%s)", getUnit()), // range axis title
+				"", // unit: already specified
 				dataset);
 		final String tLabel = (tree.getLabel() == null) ? "" : tree.getLabel();
 		final SNTChart frame = new SNTChart(tLabel + " Annotated Length", chart, new Dimension(400, 600));
@@ -557,9 +590,99 @@ public class TreeStatistics extends TreeAnalyzer {
 	public SNTChart getPolarHistogram(final String metric) {
 		final String normMeasurement = getNormalizedMeasurement(metric);
 		final HistogramDatasetPlus datasetPlus = new HDPlus(normMeasurement, true);
-		final JFreeChart chart = AnalysisUtils.createPolarHistogram(normMeasurement, lastDstats.dStats, datasetPlus);
-		final SNTChart frame = new SNTChart("Polar Hist. " + tree.getLabel(), chart);
-		return frame;
+		final JFreeChart chart = AnalysisUtils.createPolarHistogram(normMeasurement, getUnit(), lastDstats.dStats, datasetPlus);
+		return new SNTChart("Polar Hist. " + tree.getLabel(), chart);
+	}
+
+	/**
+	 * Assembles a Flow plot (aka Sankey diagram) for the specified feature using
+	 * "mean" as integration statistic, and no cutoff value.
+	 * 
+	 * @see #getFlowPlot(String, Collection, String, double, boolean)
+	 */
+	public SNTChart getFlowPlot(final String feature, final Collection<BrainAnnotation> annotations,
+			final boolean normalize) {
+		return getFlowPlot(feature, annotations, "sum", Double.MIN_VALUE, normalize);
+	}
+
+	/**
+	 * Assembles a Flow plot (aka Sankey diagram) for the specified feature using
+	 * "mean" as integration statistic, no cutoff value, and all of the brain
+	 * regions of the specified ontology depth.
+	 *
+	 * @param feature the feature ({@value MultiTreeStatistics#LENGTH},
+	 *                {@value MultiTreeStatistics#N_BRANCH_POINTS},
+	 *                {@value MultiTreeStatistics#N_TIPS}, etc.).
+	 * @param depth   the ontological depth of the compartments to be considered
+	 * @return the flow plot
+	 * @see #getFlowPlot(String, Collection, String, double, boolean)
+	 */
+	public SNTChart getFlowPlot(final String feature, final int depth) {
+		return getFlowPlot(feature, depth, Double.MIN_VALUE, true);
+	}
+
+
+	/**
+	 * Assembles a Flow plot (aka Sankey diagram) for the specified feature using
+	 * "mean" as integration statistic, no cutoff value, and all of the brain
+	 * regions of the specified ontology depth. *
+	 * 
+	 * @param feature the feature ({@value MultiTreeStatistics#LENGTH},
+	 *                {@value MultiTreeStatistics#N_BRANCH_POINTS},
+	 *                {@value MultiTreeStatistics#N_TIPS}, etc.)
+	 * @param depth   the ontological depth of the compartments to be considered
+	 * @param cutoff  a filtering option. If the computed {@code feature} for an
+	 *                annotation is below this value, that annotation is excluded
+	 *                from the plot * @param normalize If true, values are retrieved
+	 *                as ratios. E.g., If {@code feature} is
+	 *                {@value MultiTreeStatistics#LENGTH}, and {@code cutoff} 0.1,
+	 *                BrainAnnotations in {@code annotations} associated with less
+	 *                than 10% of cable length are ignored.
+	 * @return the flow plot
+	 */
+	public SNTChart getFlowPlot(final String feature, final int depth, final double cutoff, final boolean normalize) {
+		return getFlowPlot(feature, getAnnotations(depth), "sum", cutoff, normalize);
+	}
+
+	/**
+	 * Assembles a Flow plot (aka Sankey diagram) for the specified feature using
+	 * "mean" as integration statistic, and no cutoff value.
+	 * 
+	 * @see #getFlowPlot(String, Collection, String, double, boolean)
+	 */
+	public SNTChart getFlowPlot(final String feature, final Collection<BrainAnnotation> annotations) {
+		return getFlowPlot(feature, annotations, "sum", Double.MIN_VALUE, false);
+	}
+
+	/**
+	 * Assembles a Flow plot (aka Sankey diagram) for the specified feature.
+	 *
+	 * @param feature     the feature ({@value MultiTreeStatistics#LENGTH},
+	 *                    {@value MultiTreeStatistics#N_BRANCH_POINTS},
+	 *                    {@value MultiTreeStatistics#N_TIPS}, etc.). Note that the
+	 *                    majority of {@link MultiTreeStatistics#getAllMetrics()}
+	 *                    metrics are currently not supported.
+	 * @param annotations the BrainAnnotations to be queried. Null not allowed.
+	 * @param statistic   the integration statistic (lower case). Either "mean",
+	 *                    "sum", "min" or "max". Null not allowed.
+	 * @param cutoff      a filtering option. If the computed {@code feature} for an
+	 *                    annotation is below this value, that annotation is
+	 *                    excluded from the plot
+	 * @param normalize   If true, values are retrieved as ratios. E.g., If
+	 *                    {@code feature} is {@value MultiTreeStatistics#LENGTH},
+	 *                    and {@code cutoff} 0.1, BrainAnnotations in
+	 *                    {@code annotations} associated with less than 10% of cable
+	 *                    length are ignored.
+	 * 
+	 * @return the SNTChart holding the flow plot
+	 */
+	public SNTChart getFlowPlot(final String feature, final Collection<BrainAnnotation> annotations,
+			final String statistic, final double cutoff, final boolean normalize) {
+		final GroupedTreeStatistics gts = new GroupedTreeStatistics();
+		gts.addGroup(Collections.singleton(getParsedTree()), (null == tree.getLabel()) ? "" : tree.getLabel());
+		final SNTChart chart = gts.getFlowPlot(feature, annotations, statistic, cutoff, normalize);
+		chart.setTitle("Flow Plot [Single Cell]");
+		return chart;
 	}
 
 	public static TreeStatistics fromCollection(final Collection<Tree> trees, final String metric) {
@@ -591,9 +714,8 @@ public class TreeStatistics extends TreeAnalyzer {
 	}
 
 	protected SNTChart getHistogram(final String normMeasurement, final HistogramDatasetPlus datasetPlus) {
-		final JFreeChart chart = AnalysisUtils.createHistogram(normMeasurement, lastDstats.dStats, datasetPlus);
-		final SNTChart frame = new SNTChart("Hist. " + tree.getLabel(), chart);
-		return frame;
+		final JFreeChart chart = AnalysisUtils.createHistogram(normMeasurement, getUnit(), lastDstats.dStats, datasetPlus);
+		return new SNTChart("Hist. " + tree.getLabel(), chart);
 	}
 
 	protected static String tryReallyHardToGuessMetric(final String guess) {
@@ -1041,7 +1163,7 @@ public class TreeStatistics extends TreeAnalyzer {
 		}
 	}
 
-	class StatisticsInstance {
+	static class StatisticsInstance {
 
 		private SummaryStatistics sStatistics;
 		private DescriptiveStatistics dStatistics;
@@ -1159,6 +1281,8 @@ public class TreeStatistics extends TreeAnalyzer {
 		hist = tStats.getAnnotatedLengthHistogram(depth, "ratio");
 		hist.annotateCategory(somaCompartment.acronym(), "soma");
 		hist.setFontSize(25);
+		hist.show();
+		hist = tStats.getFlowPlot("Cable length", tStats.getAnnotatedLength(depth).keySet());
 		hist.show();
 	}
 }

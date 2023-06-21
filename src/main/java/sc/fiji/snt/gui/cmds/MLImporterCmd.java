@@ -2,7 +2,7 @@
  * #%L
  * Fiji distribution of ImageJ for the life sciences.
  * %%
- * Copyright (C) 2010 - 2022 Fiji developers.
+ * Copyright (C) 2010 - 2023 Fiji developers.
  * %%
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as
@@ -56,7 +56,7 @@ import sc.fiji.snt.io.MouseLightLoader;
  * @see MouseLightLoader
  * @author Tiago Ferreira
  */
-@Plugin(type = Command.class, visible = false,
+@Plugin(type = Command.class,
 	label = "Import MouseLight Reconstructions", initializer = "init")
 public class MLImporterCmd extends CommonDynamicCmd {
 
@@ -139,11 +139,13 @@ public class MLImporterCmd extends CommonDynamicCmd {
 			final MouseLightLoader loader = new MouseLightLoader(id);
 			inMap.put(id, (loader.idExists()) ? loader.getNodes(compartment) : null);
 		}
-		final Map<String, Tree> result = pafm.importNeurons(inMap, getColor(), "um");
+		final Map<String, Tree> result = pafm.importNeurons(inMap, getColor(), GuiUtils.micrometer());
 		final List<Tree> filteredResult = result.values().stream().filter(tree -> (tree != null && !tree.isEmpty()))
 				.collect(Collectors.toList());
 		if (filteredResult.isEmpty()) {
 			resetUI(false);
+			if (recViewer != null)
+				resetProgress(recViewer);
 			status("Error... No reconstructions imported", true);
 			error("No reconstructions could be retrieved: Invalid Query?");
 			return;
@@ -226,7 +228,7 @@ public class MLImporterCmd extends CommonDynamicCmd {
 			final MutableModuleItem<Boolean> clearExistingInput = getInfo()
 				.getMutableInput("clearExisting", Boolean.class);
 			clearExistingInput.setLabel("Clear existing reconstructions");
-			pafm = new PathAndFillManager();
+			pafm = new PathAndFillManager(1, 1, 1, GuiUtils.micrometer());
 			pafm.setHeadless(true);
 		} else if (sntService.isActive()) {
 			snt = sntService.getPlugin();

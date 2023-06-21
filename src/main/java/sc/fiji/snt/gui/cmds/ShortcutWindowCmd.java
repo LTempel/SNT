@@ -2,7 +2,7 @@
  * #%L
  * Fiji distribution of ImageJ for the life sciences.
  * %%
- * Copyright (C) 2010 - 2022 Fiji developers.
+ * Copyright (C) 2010 - 2023 Fiji developers.
  * %%
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as
@@ -342,7 +342,7 @@ public class ShortcutWindowCmd extends ContextCommand implements PlugIn {
 		}
 	}
 
-	private class Shortcut {
+	private static class Shortcut {
 
 		final String label;
 		final Class<? extends Command> cmd;
@@ -380,10 +380,10 @@ public class ShortcutWindowCmd extends ContextCommand implements PlugIn {
 
 			private boolean supported(final File file) {
 				final String filename = file.getName().toLowerCase();
-				return (filename.endsWith(".traces")) || (filename.endsWith("swc")) || (filename.endsWith(".json"));
+				return (filename.endsWith(".traces")) || (filename.endsWith("swc")) || (filename.endsWith(".json") || (filename.endsWith(".ndf")));
 			}
 
-			final void importFile(final File file) {
+			void importFile(final File file) {
 				final Collection<Tree> trees = Tree.listFromFile(file.getAbsolutePath());
 				if (trees == null || trees.isEmpty()) {
 					guiUtils.error(file.getName() + " does not seem to contain valid reconstruction(s).");

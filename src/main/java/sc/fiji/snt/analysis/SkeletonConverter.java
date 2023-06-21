@@ -2,7 +2,7 @@
  * #%L
  * Fiji distribution of ImageJ for the life sciences.
  * %%
- * Copyright (C) 2010 - 2022 Fiji developers.
+ * Copyright (C) 2010 - 2023 Fiji developers.
  * %%
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as
@@ -118,7 +118,7 @@ public class SkeletonConverter {
 	 * @param lowerThreshold      intensities below this value will be set to zero,
 	 *                            and will not contribute to the skeleton. Ignored
 	 *                            if < 0
-	 * @param uperThreshold       intensities above this value will be set to zero,
+	 * @param upperThreshold       intensities above this value will be set to zero,
 	 *                            and will not contribute to the skeleton. Ignored
 	 *                            if < 0
 	 * @param erodeIsolatedPixels If true, any isolated pixels (single point
@@ -550,7 +550,7 @@ public class SkeletonConverter {
             final SWCPoint referenceVertex = vertexArray[i];
             final List<Neighbor<double[], SWCPoint>> neighbors = new ArrayList<>();
             // Query the ball around the reference vertex
-            kdtree.range(coordinates[i], maxConnectDist, neighbors);
+            kdtree.search(coordinates[i], maxConnectDist, neighbors);
             for (final Neighbor<double[], SWCPoint> neighbor : neighbors) {
                 final SWCPoint neighborVertex = neighbor.value;
                 if (neighborVertex.v == referenceVertex.v) {

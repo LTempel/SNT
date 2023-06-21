@@ -2,7 +2,7 @@
  * #%L
  * Fiji distribution of ImageJ for the life sciences.
  * %%
- * Copyright (C) 2010 - 2022 Fiji developers.
+ * Copyright (C) 2010 - 2023 Fiji developers.
  * %%
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as
@@ -341,7 +341,7 @@ public class OBJMesh {
 	 * This is just to make {@link DrawableVBO#hasMountedOnce()} accessible,
 	 * allowing to force the re-loading of meshes during an interactive session
 	 */
-	class RemountableDrawableVBO extends DrawableVBO {
+	static class RemountableDrawableVBO extends DrawableVBO {
 
 		protected OBJMesh objMesh;
 
@@ -453,14 +453,13 @@ public class OBJMesh {
 							continue;
 						}
 						switch (line.charAt(0)) {
-						case '#':
-							break;
-						case 'v':
+							case 'v':
 							parseObjVertex(line, val);
 							break;
 						case 'f':
 							hasNormals = parseObjFace(line, idx, hasNormals);
 							break;
+						case '#':
 						default:
 							break;
 						}

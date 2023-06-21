@@ -2,7 +2,7 @@
  * #%L
  * Fiji distribution of ImageJ for the life sciences.
  * %%
- * Copyright (C) 2010 - 2022 Fiji developers.
+ * Copyright (C) 2010 - 2023 Fiji developers.
  * %%
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as
@@ -61,7 +61,7 @@ import sc.fiji.snt.viewer.Viewer3D;
  *
  * @author Tiago Ferreira
  */
-@Plugin(type = Command.class, visible = false, label="Compare Groups...", initializer = "init")
+@Plugin(type = Command.class, label="Compare Groups...", initializer = "init")
 public class GroupAnalyzerCmd extends CommonDynamicCmd {
 
 	private static final String COMMON_DESC_PRE = "<HTML><div WIDTH=500>Path to directory containing Group ";
@@ -312,7 +312,7 @@ public class GroupAnalyzerCmd extends CommonDynamicCmd {
 	}
 
 	final boolean isMetricMappable(final String metric) {
-		return Arrays.stream(MultiTreeColorMapper.PROPERTIES).anyMatch(metric::equals);
+		return Arrays.asList(MultiTreeColorMapper.PROPERTIES).contains(metric);
 	}
 
 	private boolean atLeastOneValidGroup() {

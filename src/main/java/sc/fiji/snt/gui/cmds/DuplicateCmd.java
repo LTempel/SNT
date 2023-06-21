@@ -2,7 +2,7 @@
  * #%L
  * Fiji distribution of ImageJ for the life sciences.
  * %%
- * Copyright (C) 2010 - 2022 Fiji developers.
+ * Copyright (C) 2010 - 2023 Fiji developers.
  * %%
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as
@@ -41,7 +41,7 @@ import sc.fiji.snt.SNTService;
  *
  * @author Tiago Ferreira
  */
-@Plugin(type = Command.class, visible = false, label = "Duplicate Path...", initializer = "init")
+@Plugin(type = Command.class, label = "Duplicate Path...", initializer = "init")
 public class DuplicateCmd extends CommonDynamicCmd {
 
 	private final String CHOICE_LENGTH = "Use % specified below";
@@ -136,7 +136,7 @@ public class DuplicateCmd extends CommonDynamicCmd {
 	private void updateMsg() {
 		switch((int)percentage) {
 		case 100:
-			msg = String.format("Duplicating full length");
+			msg = "Duplicating full length";
 			break;
 		case 0:
 			if (junctionIndices == null || junctionIndices.isEmpty())

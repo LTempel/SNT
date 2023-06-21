@@ -62,7 +62,7 @@ Key aspects of SNT are implemented from published literature:
 | [Cx3D simulation engine](https://imagej.net/SNT:_Modeling)   | Zubler, F., & Douglas, R. (2009). A framework for modeling the growth and development of neurons and networks. *Frontiers in Computational Neuroscience*, 3, 25. https://doi.org/10.3389/neuro.10.025.2009 |
 |                                                              |                                                              |
 | [L-measure](http://cng.gmu.edu:8080/Lm/) metrics             | Scorcioni, R., Polavaram, S., & Ascoli, G. A. (2008). L-Measure: a  web-accessible tool for the analysis, comparison and search of digital  reconstructions of neuronal morphologies. *Nature Protocols*, 3(5), 866. https://doi.org/10.1038/nprot.2008.51 |
-| [Sholl-based metrics](https://imagej.net/Sholl.html#Metrics) | Ferreira, T., Blackman, A., Oyrer, J. *et al.* (2014). Neuronal morphometry directly from bitmap images. *Nature Methods*, 11, 982–984 . https://doi.org/10.1038/nmeth.3125<br/>Milosević, N.T. & Ristanović, D. (2007). The Sholl analysis of neuronal cell images: semi-log or log-log method? *Journal of Theoretical Biology* 245, 130–140. https://doi.org/10.1016/j.jtbi.2006.09.022<br/>Ristanović,  D.,  Milosević,  N.T.  &  Stulić,  V.  (2006). Application  of  modified  Sholl  analysis  to  neuronal  dendritic arborization of the cat spinal cord. *Journal of Neuroscience Methods* 158, 2120–218. https://doi.org/10.1016/j.jneumeth.2006.05.030 |
+| [Sholl-based metrics](https://imagej.net/Sholl.html#Metrics) | Ferreira, T., Blackman, A., Oyrer, J. *et al.* (2014). Neuronal morphometry directly from bitmap images. *Nature Methods*, 11, 982–984. https://doi.org/10.1038/nmeth.3125<br/>Luis Miguel Garcia-Segura and Julio Perez-Marquez (2014). A new mathematical function to evaluate neuronal morphology using the Sholl analysis. *Journal of Neuroscience Methods*, 226, 103-109. https://doi.org/10.1016/j.jneumeth.2014.01.016<br/>Milosević, N.T. & Ristanović, D. (2007). The Sholl analysis of neuronal cell images: semi-log or log-log method? *Journal of Theoretical Biology* 245, 130–140. https://doi.org/10.1016/j.jtbi.2006.09.022<br/>Ristanović,  D.,  Milosević,  N.T.  &  Stulić,  V.  (2006). Application  of  modified  Sholl  analysis  to  neuronal  dendritic arborization of the cat spinal cord. *Journal of Neuroscience Methods* 158, 2120–218. https://doi.org/10.1016/j.jneumeth.2006.05.030 |
 | Distinct colors (SNT's palette of discriminatory colors) | K. Kelly (1965): Twenty-two colors of maximum contrast. Color Eng., 3(6), 1965. ([PDF](http://www.iscc.org/pdf/PC54_1724_001.pdf))<br/>Paul Green-Armytage, "A Colour Alphabet and the Limits of Colour Coding". Colour: Design & Creativity (5) (2010): 10, 1-23 ([PDF](https://eleanormaclure.files.wordpress.com/2011/03/colour-coding.pdf)) |
 
 
@@ -81,6 +81,20 @@ Any work that uses data from the supported databases and/or reference brains sho
 | [NeuroMorpho](http://neuromorpho.org/)                       | Ascoli GA, Donohue DE, Halavi M. NeuroMorpho.Org: A Central Resource for Neuronal Morphologies. *Journal of Neuroscience* (35) 9247–9251 (2007). https://dx.doi.org/10.1523/JNEUROSCI.2055-07.2007 |
 | [Virtual Fly brain](https://virtualflybrain.org/)            | Milyaev N, Osumi-Sutherlandet D, Reeve S, *et al*. The Virtual Fly Brain Browser and Query Interface. *Bioinformatics*, 28(3), 411–415 (2012). https://dx.doi.org/10.1093/bioinformatics/btr677 |
 
+
+
+## Demo Datasets
+
+Demo datasets (images and/or reconstructions) are either bundled in SNT (and thus part of the source code), or downloaded from the internet:
+
+| Dataset                                                                    | Source                                                                           |
+| :------------------------------------------------------------------------- | :------------------------------------------------------------------------------- |
+| Drosophila ddaC neuron (2D binary image)                                   | Bundled. Sample image for _Sholl Analysis_/Auto tracing                          |
+| Drosophila OP neuron (3D grayscale image and 'gold standard' reconstruction) | Bundled/Downloaded. [DIADEM dataset](https://diadem.janelia.org/)                |
+| Hippocampal neuron (2D multichannel image)                                 | Downloaded. Part of ImageJ's _samples_ archive                                   |
+| Hippocampal neuron (2D timelapse image with partial reconstruction)        | Bownloaded. [Cell Image Library dataset](http://cellimagelibrary.org/images/701) |
+| L-systems fractal (2D binary image with reconstruction)                    | Bundled. Generated programmatically                                              |
+| Mouse pyramidal neurons (reconstructions)                                  | Bundled. [MouseLight dataset](http://ml-neuronbrowser.janelia.org/)              |
 
 
 ## Dependencies

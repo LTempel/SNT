@@ -2,7 +2,7 @@
  * #%L
  * Fiji distribution of ImageJ for the life sciences.
  * %%
- * Copyright (C) 2010 - 2022 Fiji developers.
+ * Copyright (C) 2010 - 2023 Fiji developers.
  * %%
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as
@@ -24,8 +24,6 @@ package sc.fiji.snt.gui;
 
 import java.awt.Color;
 import java.awt.Component;
-import java.beans.PropertyChangeEvent;
-import java.beans.PropertyChangeListener;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashSet;
@@ -170,7 +168,7 @@ public class PathManagerUISearchableBar extends SNTSearchableBar {
 				guiUtils.error("No Cell IDs have been specified.");
 				return;
 			}
-			final String[] choices = ids.toArray(new String[ids.size()]);
+			final String[] choices = ids.toArray(new String[0]);
 			final String defChoice = pmui.getSNT().getPrefs().getTemp("cellidfilter", choices[0]);
 			final String chosenID = guiUtils.getChoice("Select Paths from which cell?", "Cell ID Filtering", choices,
 					defChoice);
@@ -479,12 +477,7 @@ public class PathManagerUISearchableBar extends SNTSearchableBar {
 			}
 		});
 		// There is a logic for when the "Highlights All" button is enabled. Apply it here too:
-		_highlightsButton.addPropertyChangeListener("enabled", new PropertyChangeListener() {
-			@Override
-			public void propertyChange(final PropertyChangeEvent evt) {
-				button.setEnabled(_highlightsButton.isEnabled());
-			}
-		});
+		_highlightsButton.addPropertyChangeListener("enabled", evt -> button.setEnabled(_highlightsButton.isEnabled()));
 		return button;
 	}
 

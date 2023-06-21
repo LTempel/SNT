@@ -2,7 +2,7 @@
  * #%L
  * Fiji distribution of ImageJ for the life sciences.
  * %%
- * Copyright (C) 2010 - 2022 Fiji developers.
+ * Copyright (C) 2010 - 2023 Fiji developers.
  * %%
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as
@@ -58,7 +58,7 @@ import java.util.*;
  * @author Cameron Arshadi
  * @author Tiago Ferreira
  */
-@Plugin(type = Command.class, visible = false, label = "Automated Tracing: Tree(s) from Segmented Image...", initializer = "init")
+@Plugin(type = Command.class, label = "Automated Tracing: Tree(s) from Segmented Image...", initializer = "init")
 public class SkeletonConverterCmd extends CommonDynamicCmd {
 
 	private static final String IMG_NONE= "None";
@@ -227,7 +227,7 @@ public class SkeletonConverterCmd extends CommonDynamicCmd {
 			if (snt.accessToValidImageData()) {
 				maskChoices.add(0, IMG_TRACED_DUP_CHOICE);
 				maskChoices.add(0, IMG_TRACED_SEC_LAYER_CHOICE);
-				originalChoices.add(0, "Image being traced");
+				originalChoices.add(0, IMG_TRACED_CHOICE);
 				if (isBinary(snt.getImagePlus())) {
 					// the active image is binary: assume it is the segmented (non-skeletonized)
 					maskImgChoice = IMG_TRACED_DUP_CHOICE;
@@ -361,7 +361,7 @@ public class SkeletonConverterCmd extends CommonDynamicCmd {
 				roi = chosenOrigImp.getRoi();
 
 			// Extra user-friendliness: Aggregate unexpected settings in a single list
-			final boolean isSame = (useFileChoosers) ? (maskImgFileChoice == originalImgFileChoice) : (maskImgChoice == originalImgChoice);
+			final boolean isSame = (useFileChoosers) ? (maskImgFileChoice == originalImgFileChoice) : (maskImgChoice.equals(originalImgChoice));
 			final boolean isBinary = chosenMaskImp.getProcessor().isBinary();
 			final boolean isCompatible = chosenOrigImp == null
 					|| chosenMaskImp.getCalibration().equals(chosenOrigImp.getCalibration());
@@ -512,6 +512,8 @@ public class SkeletonConverterCmd extends CommonDynamicCmd {
 		} catch (final Exception | Error ex) {
 			ex.printStackTrace();
 			error("An exception occured. See Console for details.");
+		} finally {
+			snt.setCanvasLabelAllPanes(null);
 		}
 	}
 

@@ -2,7 +2,7 @@
  * #%L
  * Fiji distribution of ImageJ for the life sciences.
  * %%
- * Copyright (C) 2010 - 2022 Fiji developers.
+ * Copyright (C) 2010 - 2023 Fiji developers.
  * %%
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as
@@ -24,6 +24,7 @@ package sc.fiji.snt;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.file.Files;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -100,12 +101,24 @@ public class Tree implements TreeProperties {
 			// If fitted flavor of path exists use it instead
 			if (p.getUseFitted() && p.getFitted() != null) {
 				pathToAdd = p.getFitted();
-			}
-			else {
+			} else {
 				pathToAdd = p;
 			}
 			tree.add(pathToAdd);
 		}
+		final String unit = getCommonUnit(paths);
+		if (unit != null)
+			getProperties().setProperty(TreeProperties.KEY_SPATIAL_UNIT, unit);
+	}
+
+	private String getCommonUnit(final Collection<Path> paths) {
+		final Iterator<Path> it = paths.iterator();
+		final String ref = it.next().spacing_units;
+		while (it.hasNext()) {
+			if (!ref.equals(it.next().spacing_units))
+				return null;
+		}
+		return ref;
 	}
 
 	/**
@@ -189,6 +202,8 @@ public class Tree implements TreeProperties {
 		}
 		if (pafm == null)
 			throw new IllegalArgumentException("No paths extracted from " + filename + " Invalid file/compartment?");
+		if (getProperties().get(Tree.KEY_SPATIAL_UNIT) == null)
+			getProperties().setProperty(Tree.KEY_SPATIAL_UNIT, pafm.getBoundingBox(false).getUnit());
 	}
 
 	/**
@@ -462,20 +477,8 @@ public class Tree implements TreeProperties {
 
 		// Now remove all linkages and references to non-filtered paths
 		for (final Path p : subtree.list()) {
-			final Iterator<Path> joinsIt = p.somehowJoins.iterator();
-			while (joinsIt.hasNext()) {
-				final Path joins = joinsIt.next();
-				if (!matchesType(joins, swcTypes)) {
-					joinsIt.remove();
-				}
-			}
-			final Iterator<Path> childrenIt = p.children.iterator();
-			while (childrenIt.hasNext()) {
-				final Path child = childrenIt.next();
-				if (!matchesType(child, swcTypes)) {
-					childrenIt.remove();
-				}
-			}
+			p.somehowJoins.removeIf(joins -> !matchesType(joins, swcTypes));
+			p.children.removeIf(child -> !matchesType(child, swcTypes));
 			if (p.startJoins == null)
 				p.setIsPrimary(true);
 			else if (p.startJoins != null && !matchesType(p.startJoins, swcTypes)) {
@@ -600,7 +603,7 @@ public class Tree implements TreeProperties {
 			default:
 				break; // keep input
 		}
-		final int labelIdx = Path.getSWCtypeNames().indexOf(type);
+		final int labelIdx = Path.getSWCtypeNames().indexOf(inputType);
 		if (labelIdx == -1) throw new IllegalArgumentException(
 			"Unrecognized SWC-type label:" + type);
 		final int intType = Path.getSWCtypes().get(labelIdx);
@@ -679,7 +682,7 @@ public class Tree implements TreeProperties {
 	public boolean validSoma() {
 		final List<Path> somas = tree.stream().filter(path -> Path.SWC_SOMA == path.getSWCType())
 				.collect(Collectors.toList());
-		return !somas.isEmpty() && somas.size() < 2 && somas.stream().allMatch(Path::isPrimary);
+		return somas.size() == 1 && somas.stream().allMatch(Path::isPrimary);
 	}
 
 	/**
@@ -1008,6 +1011,20 @@ public class Tree implements TreeProperties {
 	 * @see #skeletonize(ImagePlus, int)
 	 */
 	public ImagePlus getSkeleton() {
+		final ImagePlus imp =  getSkeleton(65535);
+		SNTUtils.convertTo8bit(imp);
+		return imp;
+	}
+
+	/**
+	 * Retrieves the rasterized skeleton of this tree at 1:1 scaling.
+	 *
+	 * @param pixelValue the voxel intensities of the skeleton. If {@code -1}, each
+	 *                   path in the tree is rendered uniquely (labels image)
+	 * @return the skeletonized 16-bit binary image
+	 * @see #skeletonize(ImagePlus, int)
+	 */
+	public ImagePlus getSkeleton(final int pixelValue) {
 
 		// Find what is the offset of the tree relative to (0,0,0).
 		// We'll set padding margins similarly to getImpContainer()
@@ -1046,8 +1063,7 @@ public class Tree implements TreeProperties {
 		final ImagePlus imp = IJ.createImage("Skel " + getLabel(), w, h, d, 16);
 
 		// Skeletonize
-		skeletonize(imp, 65535);
-		SNTUtils.convertTo8bit(imp);
+		skeletonize(imp, pixelValue);
 		if (getBoundingBox().isScaled())
 			imp.setCalibration(getBoundingBox().getCalibration());
 
@@ -1348,18 +1364,27 @@ public class Tree implements TreeProperties {
 		if (f.isDirectory()) {
 			return listFromDir(tracesOrJsonFile);
 		}
-		final Tree dummyTree = new Tree();
+		Collection<Tree> trees;
+		final String baseName;
 		try {
-			dummyTree.initPathAndFillManagerFromFile(tracesOrJsonFile, "all");
-		} catch (final IllegalArgumentException ignored) {
+			if (f.getName().toLowerCase().endsWith(".json")) {
+				return MouseLightLoader.extractTrees(f, "all").values();
+			} else {
+				final PathAndFillManager pafm = new PathAndFillManager();
+				pafm.setHeadless(true);
+				baseName = SNTUtils.stripExtension(f.getName());
+				pafm.loadGuessingType(baseName, Files.newInputStream(f.toPath()));
+				trees = pafm.getTrees();
+			}
+		} catch (final IOException e) {
+			SNTUtils.error("File not parsed", e);
 			return new ArrayList<>();
 		}
-		final Collection<Tree> trees = dummyTree.pafm.getTrees();
-		final String baseName = SNTUtils.stripExtension(f.getName());
-		if (trees.size() == 1)
-			trees.iterator().next().setLabel(baseName);
-		else {
-			trees.forEach( t-> t.setLabel(baseName + " " + t.getLabel()));
+		if (baseName != null) {
+			if (trees.size() == 1)
+				trees.iterator().next().setLabel(baseName);
+			else
+				trees.forEach(t -> t.setLabel(baseName + " " + t.getLabel()));
 		}
 		return trees;
 	}
@@ -1413,7 +1438,7 @@ public class Tree implements TreeProperties {
 		if (dir == null) return trees;
 		final File dirFile = new File(dir);
 		final File[] treeFiles = SNTUtils.getReconstructionFiles(dirFile, pattern);
-		if (treeFiles == null || treeFiles.length == 0) {
+		if (treeFiles == null) {
 			return trees;
 		}
 		for (final File treeFile : treeFiles) {
@@ -1596,7 +1621,7 @@ public class Tree implements TreeProperties {
 		return clone;
 	}
 
-	private class TreeBoundingBox extends BoundingBox {
+	private static class TreeBoundingBox extends BoundingBox {
 
 		private boolean dimensionsNeedToBeComputed;
 

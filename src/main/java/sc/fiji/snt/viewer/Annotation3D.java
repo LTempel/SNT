@@ -2,7 +2,7 @@
  * #%L
  * Fiji distribution of ImageJ for the life sciences.
  * %%
- * Copyright (C) 2010 - 2022 Fiji developers.
+ * Copyright (C) 2010 - 2023 Fiji developers.
  * %%
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as
@@ -274,8 +274,6 @@ public class Annotation3D {
 			((Scatter) drawable).setWidth(this.size);
 			break;
 		case SURFACE:
-			((Shape) drawable).setWireframeWidth(this.size);
-			break;
 		case SURFACE_AND_VOLUME:
 			((Shape) drawable).setWireframeWidth(this.size);
 			break;
@@ -410,10 +408,9 @@ public class Annotation3D {
 		case SCATTER:
 			return "cloud";
 		case SURFACE:
-			return "surface";
 		case SURFACE_AND_VOLUME:
 			return "surface";
-		case STRIP:
+			case STRIP:
 		case Q_TIP:
 			return "line";
 		case MERGE:
@@ -443,7 +440,7 @@ public class Annotation3D {
 	}
 
 	/**
-	 * Returns the {@link AbstractDrawable} associated with this annotation.
+	 * Returns the AbstractDrawable associated with this annotation.
 	 *
 	 * @return the AbstractDrawable
 	 */

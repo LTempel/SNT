@@ -2,7 +2,7 @@
  * #%L
  * Fiji distribution of ImageJ for the life sciences.
  * %%
- * Copyright (C) 2010 - 2022 Fiji developers.
+ * Copyright (C) 2010 - 2023 Fiji developers.
  * %%
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as
@@ -68,7 +68,7 @@ import sc.fiji.snt.util.SNTColor;
  * @author Tiago Ferreira
  * @author Cameron Arshadi
  */
-@Plugin(type = Command.class, visible = false, label = "Path Profiler", initializer = "init")
+@Plugin(type = Command.class, label = "Path Profiler", initializer = "init")
 public class PathProfiler extends CommonDynamicCmd {
 
 	public static final String CIRCLE = "Circle (Hollow)";
@@ -182,9 +182,10 @@ public class PathProfiler extends CommonDynamicCmd {
 		}
 		this.tree = tree;
 		this.dataset = dataset;
-		if (!allPathsShareCommonFrame())
-			//FIXME: What is the easiest to select the 'active' Dataset frame
-		init();
+		if (!allPathsShareCommonFrame()) {
+			// FIXME: What is the easiest to select the 'active' Dataset frame
+			init();
+		}
 	}
 
 	/**
@@ -609,7 +610,8 @@ public class PathProfiler extends CommonDynamicCmd {
 	}
 
 	private String getXAxisLabel() {
-		return (nodeIndices) ? "Node indices" : "Distance";
+		return (nodeIndices) ? "Node indices"
+				: String.format("Distance (%s)", tree.getProperties().getProperty(Tree.KEY_SPATIAL_UNIT, "? units"));
 	}
 
 	private String getYAxisLabel(final int channel) {
@@ -642,8 +644,7 @@ public class PathProfiler extends CommonDynamicCmd {
 		if (!valuesAssignedToTree || (channel > 0 && channel != lastprofiledChannel) ) {
 			assignValues(channel);
 		}
-		String yAxisLabel = getYAxisLabel(channel);
-		final Plot plot = new Plot(getPlotTitle(channel), getXAxisLabel(), yAxisLabel);
+		final Plot plot = new Plot(getPlotTitle(channel), getXAxisLabel(), getYAxisLabel(channel));
 		final Color[] colors = getSeriesColorsAWT();
 		final StringBuilder legend = new StringBuilder();
 		for (int i = 0; i < tree.size(); i++) {

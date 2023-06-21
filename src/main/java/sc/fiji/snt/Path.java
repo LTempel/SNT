@@ -2,7 +2,7 @@
  * #%L
  * Fiji distribution of ImageJ for the life sciences.
  * %%
- * Copyright (C) 2010 - 2022 Fiji developers.
+ * Copyright (C) 2010 - 2023 Fiji developers.
  * %%
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as
@@ -35,6 +35,7 @@ import org.scijava.vecmath.Color3f;
 import org.scijava.vecmath.Point3f;
 import sc.fiji.snt.analysis.PathProfiler;
 import sc.fiji.snt.annotation.BrainAnnotation;
+import sc.fiji.snt.gui.GuiUtils;
 import sc.fiji.snt.hyperpanes.MultiDThreePanes;
 import sc.fiji.snt.util.*;
 
@@ -199,7 +200,7 @@ public class Path implements Comparable<Path> {
 	 * Instantiates a new path under default settings (isotropic 1um pixel spacing)
 	 */
 	public Path() {
-		this(1, 1, 1, "um");
+		this(1, 1, 1, GuiUtils.micrometer());
 	}
 
 	/**
@@ -402,7 +403,7 @@ public class Path implements Comparable<Path> {
 	}
 
 	protected String getRealLengthString() {
-		return String.format("%.3f", getLength());
+		return String.format(Locale.US, "%.3f", getLength()); // see https://github.com/morphonets/SNT/issues/147
 	}
 
 	public void createCircles() {
@@ -1804,9 +1805,6 @@ public class Path implements Comparable<Path> {
 	{
 		String typeName;
 		switch (type) {
-			case SWC_UNDEFINED:
-				typeName = SWC_UNDEFINED_LABEL;
-				break;
 			case SWC_SOMA:
 				typeName = SWC_SOMA_LABEL;
 				break;
@@ -1828,6 +1826,7 @@ public class Path implements Comparable<Path> {
 			case SWC_CUSTOM:
 				typeName = SWC_CUSTOM_LABEL;
 				break;
+			case SWC_UNDEFINED:
 			default:
 				typeName = SWC_UNDEFINED_LABEL;
 				break;

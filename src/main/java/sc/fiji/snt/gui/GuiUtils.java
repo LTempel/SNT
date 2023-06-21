@@ -2,7 +2,7 @@
  * #%L
  * Fiji distribution of ImageJ for the life sciences.
  * %%
- * Copyright (C) 2010 - 2022 Fiji developers.
+ * Copyright (C) 2010 - 2023 Fiji developers.
  * %%
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as
@@ -22,18 +22,6 @@
 
 package sc.fiji.snt.gui;
 
-import com.formdev.flatlaf.FlatDarculaLaf;
-import com.formdev.flatlaf.FlatDarkLaf;
-import com.formdev.flatlaf.FlatIntelliJLaf;
-import com.formdev.flatlaf.FlatLaf;
-import com.formdev.flatlaf.FlatLightLaf;
-import com.jidesoft.plaf.LookAndFeelFactory;
-import com.jidesoft.popup.JidePopup;
-import com.jidesoft.utils.ProductNames;
-
-import ij.IJ;
-import ij.ImageJ;
-
 import java.awt.BorderLayout;
 import java.awt.Canvas;
 import java.awt.Color;
@@ -46,6 +34,7 @@ import java.awt.Font;
 import java.awt.FontMetrics;
 import java.awt.Graphics2D;
 import java.awt.GridBagConstraints;
+import java.awt.GridBagLayout;
 import java.awt.GridLayout;
 import java.awt.Insets;
 import java.awt.Point;
@@ -57,6 +46,7 @@ import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.awt.event.ComponentEvent;
 import java.awt.event.ComponentListener;
+import java.awt.event.KeyAdapter;
 import java.awt.event.KeyEvent;
 import java.awt.event.KeyListener;
 import java.awt.event.MouseAdapter;
@@ -67,7 +57,6 @@ import java.awt.geom.Rectangle2D;
 import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.IOException;
-import java.lang.reflect.Field;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.URLEncoder;
@@ -78,19 +67,64 @@ import java.text.ParseException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.Stack;
+import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
-import javax.swing.*;
+import javax.swing.AbstractAction;
+import javax.swing.AbstractButton;
+import javax.swing.Action;
+import javax.swing.BorderFactory;
+import javax.swing.BoxLayout;
+import javax.swing.ButtonGroup;
+import javax.swing.DefaultListCellRenderer;
+import javax.swing.Icon;
+import javax.swing.ImageIcon;
+import javax.swing.JButton;
+import javax.swing.JCheckBox;
+import javax.swing.JCheckBoxMenuItem;
+import javax.swing.JColorChooser;
+import javax.swing.JComponent;
+import javax.swing.JDialog;
+import javax.swing.JEditorPane;
+import javax.swing.JFileChooser;
+import javax.swing.JFormattedTextField;
+import javax.swing.JLabel;
+import javax.swing.JList;
+import javax.swing.JMenu;
+import javax.swing.JMenuBar;
+import javax.swing.JMenuItem;
+import javax.swing.JOptionPane;
+import javax.swing.JPanel;
+import javax.swing.JPopupMenu;
+import javax.swing.JScrollPane;
+import javax.swing.JSpinner;
 import javax.swing.JSpinner.DefaultEditor;
+import javax.swing.JTabbedPane;
+import javax.swing.JTextArea;
+import javax.swing.JTextField;
+import javax.swing.JTextPane;
+import javax.swing.JTree;
+import javax.swing.KeyStroke;
+import javax.swing.ListSelectionModel;
+import javax.swing.LookAndFeel;
+import javax.swing.MenuElement;
+import javax.swing.SpinnerModel;
+import javax.swing.SpinnerNumberModel;
+import javax.swing.SwingConstants;
+import javax.swing.SwingUtilities;
+import javax.swing.Timer;
+import javax.swing.UIManager;
+import javax.swing.WindowConstants;
 import javax.swing.border.Border;
 import javax.swing.border.EmptyBorder;
 import javax.swing.colorchooser.AbstractColorChooserPanel;
@@ -98,8 +132,7 @@ import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
 import javax.swing.event.HyperlinkEvent;
 import javax.swing.event.HyperlinkListener;
-import javax.swing.filechooser.FileFilter;
-import javax.swing.plaf.FontUIResource;
+import javax.swing.filechooser.FileNameExtensionFilter;
 import javax.swing.text.NumberFormatter;
 import javax.swing.text.html.HTMLEditorKit;
 import javax.swing.text.html.StyleSheet;
@@ -112,6 +145,19 @@ import org.scijava.util.ColorRGB;
 import org.scijava.util.PlatformUtils;
 import org.scijava.util.Types;
 
+import com.formdev.flatlaf.FlatClientProperties;
+import com.formdev.flatlaf.FlatDarculaLaf;
+import com.formdev.flatlaf.FlatDarkLaf;
+import com.formdev.flatlaf.FlatIntelliJLaf;
+import com.formdev.flatlaf.FlatLaf;
+import com.formdev.flatlaf.FlatLightLaf;
+import com.formdev.flatlaf.icons.FlatClearIcon;
+import com.jidesoft.plaf.LookAndFeelFactory;
+import com.jidesoft.popup.JidePopup;
+import com.jidesoft.utils.ProductNames;
+
+import ij.IJ;
+import ij.ImageJ;
 import sc.fiji.snt.SNTPrefs;
 import sc.fiji.snt.SNTUtils;
 import sc.fiji.snt.analysis.SNTChart;
@@ -137,8 +183,6 @@ public class GuiUtils {
 	private JidePopup popup;
 	private boolean popupExceptionTriggered;
 	private int timeOut = 2500;
-	private Color background = Color.WHITE;
-	private Color foreground = Color.BLACK;
 
 	public GuiUtils(final Component parent) {
 		setParent(parent);
@@ -153,8 +197,6 @@ public class GuiUtils {
 			this.parent = null;
 		} else {
 			this.parent = (parent instanceof Container) ? parent : parent.getParent();
-			background = parent.getBackground();
-			foreground = parent.getForeground();
 		}
 	}
 
@@ -164,6 +206,86 @@ public class GuiUtils {
 
 	public void error(final String msg, final String title) {
 		centeredDialog(msg, title, JOptionPane.ERROR_MESSAGE);
+	}
+
+	public void notifyIfNewVersion(final int delay) {
+		final Timer timer = new Timer(delay, e -> {
+			if (SNTPrefs.firstRunAfterUpdate()) {
+				final JLabel msg = leftAlignedLabel("<HTML>&nbsp;<b>SNT was updated!</b> Click here to browse release notes.",
+						releaseNotesURL(), true);
+				showNotification(msg, true);
+			}
+		});
+		timer.setRepeats(false);
+		timer.start();
+	}
+
+	public void showNotification(final String msg, final Number msDelay) {
+		String parsedMsg;
+		if (!msg.startsWith("<HTML>")) {
+			final String[] lines = msg.split("\n");
+			parsedMsg = "<HTML><b>"+ lines[0] + "</b>";
+			for (int i = 1; i < lines.length; i++) {
+				parsedMsg += "<br>" + lines[i];
+			}
+		}
+		else
+			parsedMsg = msg;
+		showNotification(new JLabel(parsedMsg), msDelay.intValue());
+	}
+
+	public void showNotification(final JLabel msg, final int msDelay) {
+		final Timer timer = new Timer(msDelay, e -> showNotification(msg, false));
+		timer.setRepeats(false);
+		timer.start();
+	}
+
+	private void showNotification(final JLabel msg, final boolean disposeOnClick) {
+
+		final JidePopup popup = new JidePopup();
+		popup.setOwner(parent);
+		popup.setAttachable(false);
+		popup.setMovable(true);
+		popup.setReturnFocusToOwner(true);
+		popup.setTransient(false);
+		popup.setResizable(false);
+		popup.setDefaultMoveOperation(JidePopup.DO_NOTHING_ON_MOVED);
+		popup.setTimeout(180000); // 3 minutes
+		popup.setFocusable(false);
+		popup.setEnsureInOneScreen(true);
+
+		final JButton button = new JButton(new FlatClearIcon());//new FlatTabbedPaneCloseIcon());
+		button.setMargin(new Insets(0, 0, 0, 0));
+		button.setBorder(null);
+		button.setBorderPainted(false);
+		button.setContentAreaFilled(false);
+		button.addActionListener(ae -> popup.hidePopup());
+		popup.addExcludedComponent(button);
+
+		final JPanel panel = new JPanel();
+		applyRoundCorners(msg);
+		panel.add(button);
+		panel.add(msg);
+		popup.add(panel);
+
+		if (disposeOnClick) {
+			msg.addMouseListener(new MouseAdapter() {
+				@Override
+				public void mouseClicked(MouseEvent e) {
+					popup.hidePopupImmediately();
+				}
+			});
+		}
+		SwingUtilities.invokeLater(() -> popup
+				.showPopup((parent == null) ? SwingConstants.NORTH_EAST : SwingConstants.SOUTH_EAST, parent));
+	}
+
+	private static void applyRoundCorners(final JComponent component) {
+		component.putClientProperty(FlatClientProperties.STYLE, //
+				"[light]background: tint(@background,50%);" //
+						+ "[dark]background: shade(@background,15%);" //
+						+ "[light]border: 16,16,16,16,shade(@background,10%),,8;" //
+						+ "[dark]border: 16,16,16,16,tint(@background,10%),,8");
 	}
 
 	public JDialog floatingMsg(final String msg, final boolean autodismiss) {
@@ -205,9 +327,7 @@ public class GuiUtils {
 
 	public static void showHTMLDialog(final String msg, final String title) {
 		final HTMLDialog dialog = new GuiUtils().new HTMLDialog(msg, title, false);
-		SwingUtilities.invokeLater(() -> {
-			dialog.setVisible(true);
-		});
+		SwingUtilities.invokeLater(() -> dialog.setVisible(true));
 	}
 
 	public static boolean isLegacy3DViewerAvailable() {
@@ -219,10 +339,6 @@ public class GuiUtils {
 		label.setHorizontalAlignment(SwingConstants.CENTER);
 		final JidePopup popup = new JidePopup();
 		popup.add(label);
-		label.setBackground(background);
-		label.setForeground(foreground);
-		popup.setBackground(background);
-		popup.getContentPane().setBackground(background);
 		if (parent != null) {
 			popup.setOwner(parent);
 			popup.setMaximumSize(parent.getSize());
@@ -327,17 +443,108 @@ public class GuiUtils {
 
 	public String getChoice(final String message, final String title, final String[] choices,
 			final String defaultChoice) {
-		final String selectedValue = (String) JOptionPane.showInputDialog(parent, //
+		return (String) JOptionPane.showInputDialog(parent, //
 				getWrappedText(new JLabel(), message), title, JOptionPane.QUESTION_MESSAGE, null, choices,
 				(defaultChoice == null) ? choices[0] : defaultChoice);
-		return selectedValue;
 	}
 
-	public List<String> getMultipleChoices(final String message, final String title, final String[] choices) {
+	public String getChoice(final String message, final String title, final String[] choices,
+			final String[] descriptions, final String defaultChoice) {
+		final JTextArea ta = new JTextArea();
+		final JScrollPane sp = getScrollPane(ta);
+		ta.setRows(5);
+		ta.setWrapStyleWord(true);
+		ta.setLineWrap(true);
+		ta.setEditable(false);
+		ta.setFocusable(true); // allow text to be copied
+		int defIdx = Arrays.asList(choices).indexOf(defaultChoice);
+		if (defIdx < 0)
+			defIdx = 0;
+		final JList<String> list = getJList(choices);
+		if (choices.length < 11)
+			list.setVisibleRowCount(choices.length);
+		list.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
+		list.addListSelectionListener(e -> {
+			ta.setText(descriptions[list.getSelectedIndex()]);
+			ta.setCaretPosition(0);
+		});
+		list.setSelectedIndex(defIdx);
+		list.setCellRenderer(new DefaultListCellRenderer() {
+
+			private static final long serialVersionUID = -810009340376431810L;
+
+			@Override
+			public Component getListCellRendererComponent(JList<?> list, Object value, int index, boolean isSelected,
+					boolean cellHasFocus) {
+				final Component c = super.getListCellRendererComponent(list, value, index, isSelected, cellHasFocus);
+				if (isSelected)
+					c.setFont(c.getFont().deriveFont(Font.BOLD));
+				return c;
+
+			}
+		} );
+
+		ta.setText(descriptions[defIdx]);
+		ta.setCaretPosition(0);
+		ta.setBackground(list.getBackground());
+		final JPanel panel = new JPanel(new BorderLayout());
+		panel.add(getLabel(message), BorderLayout.NORTH);
+		panel.add(getScrollPane(list), BorderLayout.CENTER);
+		final JPanel bottomPanel =  new JPanel(new BorderLayout());
+		bottomPanel.add(new JLabel(" "), BorderLayout.NORTH); // spacer
+		bottomPanel.add(sp, BorderLayout.CENTER);
+		panel.add(bottomPanel, BorderLayout.SOUTH);
+		final int promptResult = JOptionPane.showOptionDialog(parent, panel, title, JOptionPane.OK_CANCEL_OPTION,
+				(choices.length < 6) ? JOptionPane.QUESTION_MESSAGE : JOptionPane.PLAIN_MESSAGE, null,
+				new String[] { "OK", "Cancel" }, list);
+		if (promptResult == JOptionPane.OK_OPTION || promptResult == 0)
+			return list.getSelectedValue();
+		return null;
+	}
+
+	private JList<String> getJList(final String[] choices) {
 		final JList<String> list = new JList<>(choices);
-		JOptionPane.showMessageDialog(
-				parent, new JScrollPane(list), title, JOptionPane.QUESTION_MESSAGE);
-		return list.getSelectedValuesList();
+		list.addKeyListener(new KeyAdapter() {
+			private static final int DELAY = 300; // 300ms delay between searches
+			private String typedString;
+			private long lastKeyTyped;
+
+			@Override
+			public void keyTyped(final KeyEvent e) {
+				final char ch = e.getKeyChar();
+				if (!Character.isLetterOrDigit(ch)) {
+					return;
+				}
+				if (lastKeyTyped + DELAY < System.currentTimeMillis()) {
+					typedString = "";
+				}
+				lastKeyTyped = System.currentTimeMillis();
+				typedString += Character.toLowerCase(ch);
+				for (int i = 0; i < list.getModel().getSize(); i++) {
+					final String str = list.getModel().getElementAt(i).toLowerCase();
+					if (str.startsWith(typedString)) {
+						list.setSelectedIndex(i);
+						list.ensureIndexIsVisible(i);
+						break;
+					}
+				}
+			}
+		});
+		return list;
+	}
+
+	private JScrollPane getScrollPane(final Component c) {
+		final JScrollPane sp = new JScrollPane(c);
+		sp.setWheelScrollingEnabled(true);
+		return sp;
+	}
+
+	public List<String> getMultipleChoices(final String title, final String[] choices) {
+		final JList<String> list = getJList(choices);
+		if (JOptionPane.showConfirmDialog(parent, getScrollPane(list), title,
+				JOptionPane.OK_CANCEL_OPTION, JOptionPane.QUESTION_MESSAGE) == JOptionPane.OK_OPTION)
+			return list.getSelectedValuesList();
+		return null;
 	}
 
 	public boolean[] getPersistentConfirmation(final String msg, final String title) {
@@ -383,7 +590,7 @@ public class GuiUtils {
 		final String userString = getString(promptMsg, promptTitle, toString(defaultValues));
 		if (userString == null)
 			return null;
-		final TreeSet<String> uniqueWords = new TreeSet<String>(Arrays.asList(userString.split(",\\s*")));
+		final TreeSet<String> uniqueWords = new TreeSet<>(Arrays.asList(userString.split(",\\s*")));
 		uniqueWords.remove("");
 		return uniqueWords;
 	}
@@ -430,7 +637,7 @@ public class GuiUtils {
 		chooser.setPreviewPanel(new JPanel());
 
 		// remove spurious panes
-		List<String> allowedPanels = new ArrayList<>();
+		List<String> allowedPanels;
 		if (panes != null) {
 			allowedPanels = Arrays.asList(panes);
 			for (final AbstractColorChooserPanel accp : chooser.getChooserPanels()) {
@@ -504,88 +711,228 @@ public class GuiUtils {
 		return values;
 	}
 
-	public File saveFile(final String title, final File file,
-		final List<String> allowedExtensions)
-	{
-		File chosenFile = null;
-		final JFileChooser chooser = fileChooser(title, file, JFileChooser.SAVE_DIALOG, JFileChooser.FILES_ONLY, allowedExtensions);
-		if (chooser.showSaveDialog(parent) == JFileChooser.APPROVE_OPTION) {
-			chosenFile = chooser.getSelectedFile();
-			if (chosenFile == null)
-				return null;
-			if (allowedExtensions != null && allowedExtensions.size() == 1) {
-				final String path = chosenFile.getAbsolutePath();
-				final String extension = allowedExtensions.get(0);
-				if (!path.endsWith(extension))
-					chosenFile = new File(path + extension);
+	public void adjustComponentThroughPrompt(final Container container) {
+
+		class DimensionFields implements DocumentListener {
+
+			final JTextField wField;
+			final JTextField hField;
+			final JCheckBox lockBox;
+			final int[] newDims;
+			int origWidth, origHeight;
+			boolean lockRatio = true;
+			boolean pauseSyncFields;
+
+			DimensionFields() {
+				newDims = new int[2];
+				wField = intField();
+				hField = intField();
+				lockBox = new JCheckBox("Constrain aspect ratio", lockRatio);
+				lockBox.addItemListener(e -> lockRatio = lockBox.isSelected());
 			}
-			if (chosenFile.exists()
-					&& !getConfirmation(chosenFile.getAbsolutePath() + " already exists. Do you want to replace it?",
-							"Override File?")) {
-				return null;
+
+			JTextField intField() {
+				final NumberFormat format = NumberFormat.getIntegerInstance();
+				format.setGroupingUsed(false);
+				final NumberFormatter formatter = new NumberFormatter(format);
+				formatter.setMinimum(0);
+				formatter.setMaximum(Integer.MAX_VALUE);
+				formatter.setAllowsInvalid(false);
+				final JFormattedTextField field = new JFormattedTextField(formatter);
+				field.setColumns(5);
+				field.getDocument().addDocumentListener(this);
+				return field;
+			}
+
+			JPanel panel() {
+				final JPanel panel = new JPanel();
+				panel.add(new JLabel("Width:"));
+				panel.add(wField);
+				panel.add(new JLabel("Height:"));
+				panel.add(hField);
+				panel.add(lockBox);
+				return panel;
+			}
+
+			int parseInt(final JTextField field) {
+				try {
+					return Integer.parseInt(field.getText());
+				} catch (final NumberFormatException e) {
+					return 500;// NumberFormatter ensures this never happens
+				}
+			}
+
+			void forceAspectRatio(final DocumentEvent e) {
+				pauseSyncFields = true;
+				if (e.getDocument() == hField.getDocument()) { // height is being set: Adjust width
+					newDims[1] = parseInt(hField);
+					newDims[0] = Math.round(((float) (newDims[1] * origWidth) / origHeight));
+					wField.setText("" + newDims[0]);
+				} else { // width is being set: Adjust height
+					newDims[0] = parseInt(wField);
+					newDims[1] = Math.round(((float) (newDims[0] * origHeight) / origWidth));
+					hField.setText("" + newDims[1]);
+				}
+				pauseSyncFields = false;
+
+			}
+
+			void prompt() {
+				origWidth = container.getWidth();
+				origHeight = container.getHeight();
+				wField.setText("" + origWidth);
+				hField.setText("" + origHeight);
+				final int result = JOptionPane.showConfirmDialog(parent, panel(), "New Dimensions",
+						JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
+				if (result == JOptionPane.OK_OPTION) {
+					final double w = GuiUtils.extractDouble(hField);
+					final double h = GuiUtils.extractDouble(hField);
+					if (Double.isNaN(w) || w <= 0 || Double.isNaN(h) || h <= 0) {
+						GuiUtils.errorPrompt("Width and Height must > 0.");
+						return;
+					}
+					container.setSize((int) w, (int) h);
+				}
+			}
+
+			@Override
+			public void insertUpdate(final DocumentEvent e) {
+				if (!pauseSyncFields && lockRatio)
+					forceAspectRatio(e);
+
+			}
+
+			@Override
+			public void removeUpdate(final DocumentEvent e) {
+				if (!pauseSyncFields && lockRatio)
+					forceAspectRatio(e);
+			}
+
+			@Override
+			public void changedUpdate(final DocumentEvent e) {
+				if (!pauseSyncFields && lockRatio)
+					forceAspectRatio(e);
 			}
 		}
+
+		new DimensionFields().prompt();
+	}
+
+	public File getOpenFile(final String title, final File file, final String... allowedExtensions) {
+		final JFileChooser chooser = fileChooser(title, file, JFileChooser.OPEN_DIALOG, JFileChooser.FILES_ONLY);
+		if (allowedExtensions != null) {
+			chooser.addChoosableFileFilter(new FileNameExtensionFilter(
+					"Reconstruction files (" + String.join(",", allowedExtensions) + ")", allowedExtensions));
+		}
+		return (File) getOpenFileChooserResult(chooser);
+	}
+
+	public File getSaveFile(final String title, final File file, final String... allowedExtensions) {
+		File chosenFile = null;
+		final JFileChooser chooser = fileChooser(title, file, JFileChooser.SAVE_DIALOG, JFileChooser.FILES_ONLY);
+		if (allowedExtensions != null) {
+			chooser.addChoosableFileFilter(new FileNameExtensionFilter(
+					"Files of type " + String.join(",", allowedExtensions).toUpperCase(), allowedExtensions));
+		}
+		chooser.setFileFilter(chooser.getAcceptAllFileFilter());
+		// HACK: On macOS this seems to help to ensure prompt is displayed as frontmost
+		final boolean focused = parent instanceof Window && parent.hasFocus();
+		if (focused)
+			((Window) parent).toBack();
+		if (chooser.showSaveDialog(parent) == JFileChooser.APPROVE_OPTION) {
+			chosenFile = chooser.getSelectedFile();
+		}
+		if (chosenFile != null && allowedExtensions != null && allowedExtensions.length == 1) {
+			final String path = chosenFile.getAbsolutePath();
+			final String extension = allowedExtensions[0];
+			if (!path.endsWith(extension))
+				chosenFile = new File(path + extension);
+		}
+		SNTPrefs.setLastknownDir(chosenFile); // null allowed
+		if (focused)
+			((Window) parent).toFront();
 		return chosenFile;
 	}
 
-	
-	@SuppressWarnings("unused")
-	private File openFile(final String title, final File file,
-		final List<String> allowedExtensions)
-	{
-		final JFileChooser chooser = fileChooser(title, file,
-			JFileChooser.OPEN_DIALOG, JFileChooser.FILES_ONLY, allowedExtensions);
-		if (chooser.showOpenDialog(parent) == JFileChooser.APPROVE_OPTION)
-			return chooser.getSelectedFile();
-		return null;
+	public File[] getReconstructionFiles() {
+		final JFileChooser fileChooser = getReconstructionFileChooser(null);
+		return (File[])getOpenFileChooserResult(fileChooser);
 	}
 
-	@SuppressWarnings("unused")
-	private File openDirectory(final String title, final File file) {
-		final JFileChooser chooser = fileChooser(title, file, JFileChooser.OPEN_DIALOG,
-			JFileChooser.DIRECTORIES_ONLY, null);
-		if (chooser.showOpenDialog(parent) == JFileChooser.APPROVE_OPTION)
-			return chooser.getSelectedFile();
-		return null;
+	public File getReconstructionFile(final File file, final String extension) {
+		FileNameExtensionFilter filter;
+		if ("swc".equals(extension))
+			filter = new FileNameExtensionFilter("SWC files (.swc)", "swc");
+		else if ("traces".equals(extension))
+			filter = new FileNameExtensionFilter("SNT TRACES files (.traces)", "traces");
+		else if ("json".equals(extension))
+			filter = new FileNameExtensionFilter("JSON files (.json)", "json");
+		else if ("ndf".equals(extension))
+			filter = new FileNameExtensionFilter("NeuronJ NDF files (.ndf)", "ndf");
+		else if ("labels".equals(extension))
+			filter = new FileNameExtensionFilter("AmiraMesh labels (.labels)", "labels");
+		else
+			filter = null;
+		final JFileChooser fileChooser = getReconstructionFileChooser(filter);
+		fileChooser.setSelectedFile(file);
+		if (extension == null)
+			fileChooser.setDialogTitle("Choose Reconstruction File");
+		else if ("labels".equals(extension))
+			fileChooser.setDialogTitle("Choose LABELS File");
+		else
+			fileChooser.setDialogTitle("Choose Reconstrution (" + extension.toUpperCase() + ") File");
+		fileChooser.setMultiSelectionEnabled(false);
+		return (File)getOpenFileChooserResult(fileChooser);
 	}
 
-	private JFileChooser fileChooser(final String title, final File file,
-		final int type, final int selectionMode, final List<String> allowedExtensions)
-	{
-		final JFileChooser chooser = getDnDFileChooser();
-		if (file != null) {
-			if (file.isDirectory()) {
-				chooser.setCurrentDirectory(file);
-			} else {
-				chooser.setCurrentDirectory(file.getParentFile());
-			}
-			chooser.setSelectedFile(file);
+	private JFileChooser getReconstructionFileChooser(final FileNameExtensionFilter filter) {
+		final JFileChooser fileChooser = GuiUtils.getDnDFileChooser();
+		fileChooser.setDialogTitle("Choose Reconstruction File(s)");
+		fileChooser.setFileSelectionMode(JFileChooser.FILES_ONLY);
+		fileChooser.setDialogType(JFileChooser.OPEN_DIALOG);
+		if (filter == null) {
+			fileChooser.addChoosableFileFilter(new FileNameExtensionFilter(
+					"Reconstruction files (.traces, .swc, .json, .ndf)", "traces", "swc", "json", "ndf"));
+		} else {
+			fileChooser.addChoosableFileFilter(filter);
 		}
+		fileChooser.setMultiSelectionEnabled(true);
+		return fileChooser;
+	}
+
+	private Object getOpenFileChooserResult(final JFileChooser fileChooser) {
+		// HACK: On macOS this seems to help to ensure prompt is displayed as frontmost
+		final boolean focused = parent instanceof Window && parent.hasFocus();
+		if (focused) ((Window) parent).toBack();
+		if (fileChooser.showOpenDialog(parent) == JFileChooser.APPROVE_OPTION) {
+			if (fileChooser.isMultiSelectionEnabled()) {
+				final File[] result = fileChooser.getSelectedFiles();
+				SNTPrefs.setLastknownDir(result[0]);
+				return result;
+			} else {
+				final File result = fileChooser.getSelectedFile();
+				SNTPrefs.setLastknownDir(result);
+				return result;
+			}
+		}
+		if (focused) ((Window) parent).toFront();
+		return null;
+	}
+
+	private JFileChooser fileChooser(final String title, final File file, final int type, final int selectionMode) {
+		final JFileChooser chooser = getDnDFileChooser();
 		chooser.setDialogTitle(title);
 		chooser.setFileSelectionMode(selectionMode);
 		chooser.setDialogType(type);
-		if (allowedExtensions != null && !allowedExtensions.isEmpty()) {
-			chooser.setFileFilter(new FileFilter() {
-
-				@Override
-				public String getDescription() {
-					return String.join(",", allowedExtensions);
+		if (file != null) {
+			if (selectionMode == JFileChooser.FILES_ONLY) {
+				if (file.isDirectory()) {
+					chooser.setCurrentDirectory(file);
+				} else {
+					chooser.setCurrentDirectory(file.getParentFile());
 				}
-
-				@Override
-				public boolean accept(final File f) {
-					if (f.isDirectory()) {
-						return true;
-					}
-					else {
-						final String filename = f.getName().toLowerCase();
-						for (final String ext : allowedExtensions) {
-							if (filename.endsWith(ext)) return true;
-						}
-						return false;
-					}
-				}
-			});
+			}
+			chooser.setSelectedFile(file);
 		}
 		return chooser;
 	}
@@ -625,7 +972,7 @@ public class GuiUtils {
 	}
 
 	public boolean[] getOptions(final String msg, final String[] options,
-		final boolean[] defaults, String title)
+		final boolean[] defaults, final String title)
 	{
 		final JPanel panel = new JPanel(new GridLayout(options.length, 1));
 		final JCheckBox[] checkboxes = new JCheckBox[options.length];
@@ -682,11 +1029,11 @@ public class GuiUtils {
 				dismiss();
 			}
 			@Override
-			public void mouseDragged(MouseEvent e) {
+			public void mouseDragged(final MouseEvent e) {
 				dismiss();
 			}
 			@Override
-			public void mousePressed(MouseEvent e) {
+			public void mousePressed(final MouseEvent e) {
 				dismiss();
 			}
 			void dismiss() {
@@ -710,9 +1057,7 @@ public class GuiUtils {
 		popup.setMovable(false);
 		popup.setDefaultMoveOperation(JidePopup.HIDE_ON_MOVED);
 		popup.setTimeout(4000);
-		SwingUtilities.invokeLater(() -> {
-			popup.showPopup(SwingConstants.CENTER, parent);
-		});
+		SwingUtilities.invokeLater(() -> popup.showPopup(SwingConstants.CENTER, parent));
 	}
 
 	public static void addTooltip(final JComponent c, final String text) {
@@ -754,12 +1099,12 @@ public class GuiUtils {
 		final Timer blinkTimer = new Timer(400, new ActionListener() {
 
 			private int count = 0;
-			private final int maxCount = 100;
+			private static final int MAX_COUNT = 100;
 			private boolean on = false;
 
 			@Override
 			public void actionPerformed(final ActionEvent e) {
-				if (count >= maxCount) {
+				if (count >= MAX_COUNT) {
 					blinkingComponent.setForeground(prevColor);
 					((Timer) e.getSource()).stop();
 				}
@@ -813,7 +1158,7 @@ public class GuiUtils {
 		side.add(new JLabel(" ")); // spacer
 		final JPanel urls = new JPanel();
 		side.add(urls);
-		JLabel url = leftAlignedLabel("Release Notes   ", "https://github.com/morphonets/SNT/releases", true);
+		JLabel url = leftAlignedLabel("Release Notes   ", releaseNotesURL(), true);
 		urls.add(url);
 		url = leftAlignedLabel("Documentation   ", "https://imagej.net/plugins/snt/", true);
 		urls.add(url);
@@ -833,19 +1178,7 @@ public class GuiUtils {
 	}
 
 	public void showDirectory(final File file) {
-		final File dir = (file.isDirectory()) ? file : file.getParentFile();
-		try {
-			Desktop.getDesktop().open(dir); // TODO: Move to java9: Desktop.getDesktop().browseFileDirectory(file);
-		} catch (final UnsupportedOperationException ue) {
-			if (PlatformUtils.isLinux())
-				try {
-					Runtime.getRuntime().exec(new String[] { "xdg-open", dir.getAbsolutePath() });
-				} catch (final Exception ignored) {
-					error("Directory does not seem to be accessible.");
-				}
-		} catch (final NullPointerException | IllegalArgumentException | IOException iae) {
-			error("Directory does not seem to be accessible.");
-		}
+		new FileChooser().reveal(file);
 	}
 
 	/* Static methods */
@@ -866,6 +1199,11 @@ public class GuiUtils {
 			}
 			sb.append(", ");
 		}
+	}
+
+	public static float uiFontSize() {
+		// under FlatFlaf UI elements scale on HiDPI screens
+		return new JLabel(" ").getFont().getSize2D();
 	}
 
 	public static void initSplashScreen() {
@@ -906,7 +1244,7 @@ public class GuiUtils {
 		final int previousTopGap = c.insets.top;
 		final Font font = label.getFont();
 		label.setFont(font.deriveFont((float) (font.getSize() * .85)));
-		if (vgap) c.insets.top = (int) (component.getFontMetrics(font).getHeight());
+		if (vgap) c.insets.top = component.getFontMetrics(font).getHeight();
 		component.add(label, c);
 		if (vgap) c.insets.top = previousTopGap;
 	}
@@ -917,8 +1255,14 @@ public class GuiUtils {
 		menu.add(label);
 	}
 
+	public static void addSeparator(final JMenu menu, final String header) {
+		final JLabel label = leftAlignedLabel(header, false);
+		if (menu.getComponentCount() > 1) menu.addSeparator();
+		menu.add(label);
+	}
+
 	public static JButton menubarButton(final IconFactory.GLYPH glyphIcon, final Action action) {
-		final JButton mi = new JButton(action) {
+		return new JButton(action) {
 			private static final long serialVersionUID = 406126659895081426L;
 
 			@Override
@@ -962,7 +1306,6 @@ public class GuiUtils {
 			}
 
 		};
-		return mi;
 	}
 
 	public static int renderedWidth(final String text) {
@@ -990,7 +1333,7 @@ public class GuiUtils {
 				@Override
 				public void mouseEntered(final MouseEvent e) {
 					if (e.getX() <= w) {
-						label.setForeground(Color.BLUE);
+						label.setForeground(new Color(0, 128, 255));
 						label.setCursor(new Cursor(Cursor.HAND_CURSOR));
 					}
 				}
@@ -1128,7 +1471,7 @@ public class GuiUtils {
 		}
 	}
 
-	public class JTextFieldFile extends TextFieldWithPlaceholder {
+	public static class JTextFieldFile extends TextFieldWithPlaceholder {
 
 		private static final long serialVersionUID = 6943445407475634685L;
 		private File file;
@@ -1260,7 +1603,7 @@ public class GuiUtils {
 		mi = menuItemTriggeringURL("Known Issues", "https://github.com/morphonets/SNT/issues");
 		mi.setIcon(IconFactory.getMenuIcon(GLYPH.BUG));
 		helpMenu.add(mi);
-		mi = menuItemTriggeringURL("Release Notes", "https://github.com/morphonets/SNT/releases");
+		mi = menuItemTriggeringURL("Release Notes", releaseNotesURL());
 		mi.setIcon(IconFactory.getMenuIcon(GLYPH.NEWSPAPER));
 		helpMenu.add(mi);
 
@@ -1388,8 +1731,8 @@ public class GuiUtils {
 		textfield.setColumns(maxDigits);
 		final NumberFormatter formatter = (NumberFormatter) textfield
 			.getFormatter();
-		StringBuilder decString = new StringBuilder();
-		while (decString.length() <= nDecimals)
+		final StringBuilder decString = new StringBuilder();
+		while (decString.length() < nDecimals)
 			decString.append("0");
 		final DecimalFormat decimalFormat = new DecimalFormat("0." + decString);
 		formatter.setFormat(decimalFormat);
@@ -1515,43 +1858,45 @@ public class GuiUtils {
 				return (AbstractButton) current;
 			}
 			else if (current instanceof Container) {
-				for (final Component child : ((Container) current).getComponents()) {
-					stack.add(child);
-				}
+				stack.addAll(Arrays.asList(((Container) current).getComponents()));
 			}
 		}
 		return null;
 	}
 
 	public static JFileChooser getDnDFileChooser() {
-		final JFileChooser fileChooser = new JFileChooser();
-		fileChooser.setDragEnabled(true);
-		new FileDrop(fileChooser, new FileDrop.Listener() {
-
-			final GuiUtils guiUtils = new GuiUtils(fileChooser);
-
+		@SuppressWarnings("serial")
+		final JFileChooser fileChooser = new FileChooser() {
 			@Override
-			public void filesDropped(final File[] files) {
-				if (files.length == 0) { // Is this even possible?
-					guiUtils.error("Dropped file(s) not recognized.");
-					return;
+			public File getCurrentDirectory() {
+				// Workaround Linux bug where somehow directory always becomes root
+				if (super.getCurrentDirectory() == null || super.getCurrentDirectory().toPath().getNameCount() == 0) {
+					return SNTPrefs.lastknownDir();
 				}
-				// see ij.io.DragAndDropHandler
-				final File firstFile = files[0];
-				if (fileChooser.isMultiSelectionEnabled()) {
-					final File dir = firstFile.getParentFile();
-					fileChooser.setCurrentDirectory(dir);
-					fileChooser.setSelectedFiles(files);
-				} else {
-					if (fileChooser.getFileSelectionMode() == JFileChooser.DIRECTORIES_ONLY && !firstFile.isDirectory())
-						fileChooser.setCurrentDirectory(firstFile.getParentFile());
-					if (fileChooser.getDialogType() == JFileChooser.SAVE_DIALOG && firstFile.isDirectory())
-						fileChooser.setCurrentDirectory(firstFile);
-					else
-						fileChooser.setSelectedFile(firstFile);
-				}
-				fileChooser.rescanCurrentDirectory();
+				return super.getCurrentDirectory();
 			}
+		};
+		fileChooser.setCurrentDirectory(SNTPrefs.lastknownDir());
+		new FileDrop(fileChooser, files -> {
+			if (files.length == 0) { // Is this even possible?
+				new GuiUtils(fileChooser).error("Dropped file(s) not recognized.");
+				return;
+			}
+			// see ij.io.DragAndDropHandler
+			final File firstFile = files[0];
+			if (fileChooser.isMultiSelectionEnabled()) {
+				final File dir = (firstFile.isDirectory()) ? firstFile : firstFile.getParentFile();
+				fileChooser.setCurrentDirectory(dir);
+				fileChooser.setSelectedFiles(files);
+			} else {
+				if (fileChooser.getFileSelectionMode() == JFileChooser.DIRECTORIES_ONLY && !firstFile.isDirectory())
+					fileChooser.setCurrentDirectory(firstFile.getParentFile());
+				if (fileChooser.getDialogType() == JFileChooser.SAVE_DIALOG && firstFile.isDirectory())
+					fileChooser.setCurrentDirectory(firstFile);
+				else
+					fileChooser.setSelectedFile(firstFile);
+			}
+			fileChooser.rescanCurrentDirectory();
 		});
 		return fileChooser;
 	}
@@ -1585,8 +1930,6 @@ public class GuiUtils {
 	public static boolean setLookAndFeel(final String lookAndFeelName, final boolean persistentChoice, final Component... componentsToUpdate) {
 		boolean success;
 		storeExistingLookAndFeel();
-		// embedded menu bar make dialogs exaggeratedly wide in main UI
-		UIManager.put("TitlePane.menuBarEmbedded", false);
 		switch (lookAndFeelName) {
 		case (LAF_LIGHT):
 			success = FlatLightLaf.setup();
@@ -1632,60 +1975,8 @@ public class GuiUtils {
 		return success;
 	}
 
-	/** HACK Font too big on ubuntu: https://stackoverflow.com/a/31345102 */
-	@SuppressWarnings("unused")
-	private static void checkGTKLookAndFeel() throws Exception {
-		final LookAndFeel look = UIManager.getLookAndFeel();
-		if (!look.getID().equals("GTK")) return;
-		final int dpi = Toolkit.getDefaultToolkit().getScreenResolution();
-		if (dpi <= 72) return;
-		final float scaleFont = dpi / 72;
-		new JFrame();
-		new JButton();
-		new JComboBox<>();
-		new JRadioButton();
-		new JCheckBox();
-		new JTextArea();
-		new JTextField();
-		new JTable();
-		new JToggleButton();
-		new JSpinner();
-		new JSlider();
-		new JTabbedPane();
-		new JMenu();
-		new JMenuBar();
-		new JMenuItem();
-
-		Object styleFactory;
-		final Field styleFactoryField = look.getClass().getDeclaredField(
-			"styleFactory");
-		styleFactoryField.setAccessible(true);
-		styleFactory = styleFactoryField.get(look);
-
-		final Field defaultFontField = styleFactory.getClass().getDeclaredField(
-			"defaultFont");
-		defaultFontField.setAccessible(true);
-		final Font defaultFont = (Font) defaultFontField.get(styleFactory);
-		FontUIResource newFontUI;
-		newFontUI = new FontUIResource(defaultFont.deriveFont(defaultFont
-			.getSize() - scaleFont));
-		defaultFontField.set(styleFactory, newFontUI);
-
-		final Field stylesCacheField = styleFactory.getClass().getDeclaredField(
-			"stylesCache");
-		stylesCacheField.setAccessible(true);
-		final Object stylesCache = stylesCacheField.get(styleFactory);
-		final Map<?, ?> stylesMap = (Map<?, ?>) stylesCache;
-		for (final Object mo : stylesMap.values()) {
-			final Field f = mo.getClass().getDeclaredField("font");
-			f.setAccessible(true);
-			final Font fo = (Font) f.get(mo);
-			f.set(mo, fo.deriveFont(fo.getSize() - scaleFont));
-		}
-	}
-
 	public static void setAutoDismiss(final JDialog dialog) {
-		final int DELAY = 2500;
+		final int DELAY = 3000;
 		final Timer timer = new Timer(DELAY, e -> dialog.dispose());
 		timer.setRepeats(false);
 		dialog.addMouseListener(new MouseAdapter() {
@@ -1714,7 +2005,9 @@ public class GuiUtils {
 	}
 
 	public static void tile(final List<? extends Window> windowList) {
-		if (windowList == null || windowList.isEmpty()) return;
+		// make list immutable in case windowList is being modified programmatically (e.g., in a script)
+		final List<? extends Window> wList = Collections.unmodifiableList(windowList);
+		if (wList == null || wList.isEmpty()) return;
 		// FIXME: This is all taken from ij1.
 		final Rectangle screen = ij.gui.GUI.getMaxWindowBounds(ij.IJ.getApplet());
 		final int XSTART = 4, YSTART = 94, GAP = 2;
@@ -1723,7 +2016,7 @@ public class GuiUtils {
 		int minHeight = Integer.MAX_VALUE;
 		double totalWidth = 0;
 		double totalHeight = 0;
-		for (final Window window : windowList) {
+		for (final Window window : wList) {
 			final Dimension d = window.getSize();
 			final int w = d.width;
 			final int h = d.height + titlebarHeight;
@@ -1734,7 +2027,7 @@ public class GuiUtils {
 			totalWidth += w;
 			totalHeight += h;
 		}
-		final int nPics = windowList.size();
+		final int nPics = wList.size();
 		final double averageWidth = totalWidth / nPics;
 		final double averageHeight = totalHeight / nPics;
 		int tileWidth = (int) averageWidth;
@@ -1769,7 +2062,7 @@ public class GuiUtils {
 		} while (!theyFit);
 		hloc = XSTART;
 		vloc = YSTART;
-		for (final Window window : windowList) {
+		for (final Window window : wList) {
 			if (hloc + tileWidth > screen.width) {
 				hloc = XSTART;
 				vloc = vloc + tileHeight;
@@ -1787,30 +2080,218 @@ public class GuiUtils {
 	}
 
 	public JMenuItem combineChartsMenuItem() {
-		final JMenuItem jmi = new JMenuItem("Combine Plots Into Montage...", IconFactory.getMenuIcon(GLYPH.GRID));
-		jmi.setToolTipText("Combines isolated charts (plots, histograms, etc.) into a grid layout");
-		jmi.addActionListener(e -> combineOpenCharts());
+		final JMenuItem jmi = new JMenuItem("Combine Charts Into Montage...", IconFactory.getMenuIcon(GLYPH.GRID));
+		jmi.setToolTipText("Combines isolated SNT charts (plots, histograms, etc.) into a grid layout");
+		jmi.addActionListener(e -> combineSNTChartPrompt());
 		return jmi;
 	}
 
-	private void combineOpenCharts() {
+	private void combineSNTChartPrompt() {
+
+		class CombineGUI implements DocumentListener {
+
+			final JTextField colField;
+			final JTextField rowField;
+			final JList<String> titles;
+			final JCheckBox checkbox;
+			final Map<String, SNTChart> charts;
+
+			boolean pauseSyncFields;
+			private int nRows;
+			private int nCols;
+
+			CombineGUI(final Collection<SNTChart> inputCharts) {
+				charts = new TreeMap<>((a, b) -> {
+					try {
+						return Integer.valueOf(a.split(". ")[0]).compareTo(Integer.valueOf(b.split(". ")[0]));
+					} catch (final Exception ignored) {
+						return a.compareTo(b);
+					}
+				});
+				int idx = 1;
+				for (final SNTChart c : inputCharts) {
+					if (!c.isCombined()) {
+						// index ensures charts with repeated titles are not excluded
+						charts.put(String.format("%d. %s", idx++, c.getTitle()), c);
+					}
+				}
+				colField = intField();
+				rowField = intField();
+				titles = getJList(charts.keySet().toArray(new String[0]));
+				checkbox = new JCheckBox("Label panels", false);
+			}
+
+			JTextField intField() {
+				final NumberFormat format = NumberFormat.getIntegerInstance();
+				format.setGroupingUsed(false);
+				final NumberFormatter formatter = new NumberFormatter(format);
+				formatter.setMinimum(1);
+				formatter.setMaximum(charts.size());
+				//formatter.setAllowsInvalid(false);
+				final JFormattedTextField field = new JFormattedTextField(formatter);
+				field.setColumns(5);
+				field.getDocument().addDocumentListener(this);
+				return field;
+			}
+
+			JPanel panel() {
+				final JPanel contentPane = new JPanel(new GridBagLayout());
+				final GridBagConstraints c = defaultGbc();
+				c.fill = GridBagConstraints.HORIZONTAL;
+				c.gridwidth = 1;
+				contentPane.add(leftAlignedLabel("Charts to be combined:", true), c);
+				++c.gridy;
+				contentPane.add(getScrollPane(titles), c);
+				++c.gridy;
+				contentPane.add(leftAlignedLabel("Montage Layout:", true), c);
+				++c.gridy;
+				final JPanel panel1 = new JPanel();
+				panel1.add(new JLabel("No. columns:"));
+				panel1.add(colField);
+				panel1.add(new JLabel("No rows:"));
+				panel1.add(rowField);
+				contentPane.add(panel1, c);
+				++c.gridy;
+				contentPane.add(checkbox, c);
+				return contentPane;
+			}
+
+			int parseInt(final JTextField field) {
+				try {
+					return Math.max(1, Integer.parseInt(field.getText()));
+				} catch (final NumberFormatException e) {
+					return 1;// NumberFormatter ensures this never happens
+				}
+			}
+
+			void updateFields(final DocumentEvent e) {
+				pauseSyncFields = true;
+				int n = titles.getSelectedIndices().length;
+				if (n == 0)
+					n = charts.size();
+				if (e.getDocument() == rowField.getDocument()) { // rows is being set: Adjust cols
+					nRows = parseInt(rowField);
+					nCols = Math.max(1, (int) Math.ceil(n / nRows));
+					colField.setText("" + nCols);
+				} else { // cols is being set: Adjust rows
+					nCols = parseInt(colField);
+					nRows = Math.max(1, (int) Math.ceil(n / nCols));
+					rowField.setText("" + nRows);
+				}
+				pauseSyncFields = false;
+			}
+
+			void prompt() {
+				nCols = Math.max(1, (int) Math.floor(Math.sqrt(charts.size())));
+				nRows = Math.max(1, (int) Math.ceil(charts.size() / nCols));
+				colField.setText("" + nCols);
+				rowField.setText("" + nRows);
+				final int result = JOptionPane.showConfirmDialog(parent, panel(), "Make SNTChart Montage",
+						JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
+				if (result == JOptionPane.OK_OPTION) {
+					final double rows = GuiUtils.extractDouble(rowField);
+					final double cols = GuiUtils.extractDouble(rowField);
+					if (Double.isNaN(rows) || rows <= 0 || Double.isNaN(cols) || cols <= 0) {
+						error("No. of columns and no. of rows must > 0.");
+						return;
+					}
+					final Collection<SNTChart> selection = (titles.getSelectedIndices().length == 0) ? charts.values()
+							: charts.entrySet().stream()
+									.filter(entry -> titles.getSelectedValuesList().contains(entry.getKey()))
+									.map(Map.Entry::getValue).collect(Collectors.toList());
+					if (selection == null || selection.isEmpty()) {
+						error("No charts selected from list.");
+						return;
+					}
+					SNTChart.combine(selection, (int) rows, (int) cols, checkbox.isSelected()).show();
+				}
+			}
+
+			@Override
+			public void insertUpdate(final DocumentEvent e) {
+				if (!pauseSyncFields)
+					updateFields(e);
+			}
+
+			@Override
+			public void removeUpdate(final DocumentEvent e) {
+				if (!pauseSyncFields)
+					updateFields(e);
+			}
+
+			@Override
+			public void changedUpdate(final DocumentEvent e) {
+				if (!pauseSyncFields)
+					updateFields(e);
+			}
+		}
+
 		final List<SNTChart> charts = SNTChart.openCharts().stream().filter(c -> !c.isCombined())
 				.collect(Collectors.toList());
 		if (charts.size() < 2) {
-			error("No charts available: Either no charts are currently open,"
+			error("No charts available: Either no other charts are currently open,"
 					+ " or displayed ones cannot be merged. Make sure that at  least"
 					+ " two single charts (histogram, plot, etc.) are open and retry.");
 		} else {
-
-			final Double rUser = getDouble("" + charts.size() + " charts are currently open."
-					+ " Enter the number of rows to be used in the montage (leave empty for default"
-					+ " settings):", "Combine Charts", -1);
-			if (rUser == null)
-				return; // user pressed cancel
-			final int r = (rUser.isNaN()) ? -1 : rUser.intValue();
-			final int c = (r == -1) ? -1 : charts.size() - charts.size() / r + 1;
-			SNTChart.combine(charts, r, c, true).setVisible(true);
+			new CombineGUI(charts).prompt();
 		}
+	}
+
+	public static JTabbedPane getTabbedPane() {
+		/*
+		 * TF: This is an effort at improving the tabbed interface. JIDE provides such
+		 * functionality by default, but causes some weird looking L&F overrides (at
+		 * least on macOS). Since I have no idea on how to stop JIDE from injecting such
+		 * weirdness, we'll implement the customization ourselves.
+		 */
+		// final JideTabbedPane tabbedPane = new JideTabbedPane(JTabbedPane.TOP);
+		// tabbedPane.setBoldActiveTab(true);
+		// tabbedPane.setScrollSelectedTabOnWheel(true);
+		// tabbedPane.setTabResizeMode(JideTabbedPane.RESIZE_MODE_NONE);
+
+		final JTabbedPane tabbedPane = new JTabbedPane(JTabbedPane.TOP);
+		tabbedPane.addMouseWheelListener(e -> {
+			// https://stackoverflow.com/a/38463104
+			final JTabbedPane pane = (JTabbedPane) e.getSource();
+			final int units = e.getWheelRotation();
+			final int oldIndex = pane.getSelectedIndex();
+			final int newIndex = oldIndex + units;
+			if (newIndex < 0)
+				pane.setSelectedIndex(0);
+			else if (newIndex >= pane.getTabCount())
+				pane.setSelectedIndex(pane.getTabCount() - 1);
+			else
+				pane.setSelectedIndex(newIndex);
+		});
+		final JPopupMenu popup = new JPopupMenu();
+		tabbedPane.setComponentPopupMenu(popup);
+		final ButtonGroup group = new ButtonGroup();
+		for (final String pos : new String[] { "Top", "Bottom", "Left", "Right" }) {
+			final JMenuItem jcbmi = new JCheckBoxMenuItem("Place on " + pos, "Top".equals(pos));
+			jcbmi.addItemListener(e -> {
+				switch (pos) {
+				case "Bottom":
+					tabbedPane.setTabPlacement(JTabbedPane.BOTTOM);
+					break;
+				case "Left":
+					tabbedPane.setTabPlacement(JTabbedPane.LEFT);
+					break;
+				case "Right":
+					tabbedPane.setTabPlacement(JTabbedPane.RIGHT);
+					break;
+				default:
+					tabbedPane.setTabPlacement(JTabbedPane.TOP);
+					break;
+				}
+			});
+			group.add(jcbmi);
+			popup.add(jcbmi);
+		}
+		return tabbedPane;
+	}
+
+	private static String releaseNotesURL() {
+		return "https://github.com/morphonets/SNT/releases";
 	}
 
 	/** Tweaked version of ij.gui.HTMLDialog that is aware of parent */
@@ -1858,7 +2339,7 @@ public class GuiUtils {
 				public void actionPerformed(final ActionEvent e) {
 				}
 			}); // suppress beep on <ENTER> key
-			final JScrollPane scrollPane = new JScrollPane(editorPane);
+			final JScrollPane scrollPane = getScrollPane(editorPane);
 			getContentPane().add(scrollPane);
 			final JButton button = new JButton("OK");
 			button.addActionListener(this);
@@ -1879,7 +2360,7 @@ public class GuiUtils {
 				dialogD.width = maxWidth;
 			if (dialogD.height > 0.80 * screenD.height && screenD.height > 400) // max 80% of screen height
 				dialogD.height = (int) (0.80 * screenD.height);
-			int minHeight = editorPane.getFontMetrics(editorPane.getFont()).getHeight() * 10 + panel.getPreferredSize().height;
+			final int minHeight = editorPane.getFontMetrics(editorPane.getFont()).getHeight() * 10 + panel.getPreferredSize().height;
 			if (dialogD.height < minHeight)
 				dialogD.height = minHeight;
 			setPreferredSize(dialogD);
@@ -1941,13 +2422,10 @@ public class GuiUtils {
 			setResizable(false);
 			setDefaultCloseOperation(WindowConstants.DISPOSE_ON_CLOSE);
 			setAlwaysOnTop(true);
-			getContentPane().setBackground(background);
-			setBackground(background);
 			final JLabel label = getLabel(msg);
 			label.setHorizontalAlignment(SwingConstants.CENTER);
-			label.setBorder(new EmptyBorder(10, 10, 10, 10));
-			label.setBackground(background);
-			label.setForeground(foreground);
+			getRootPane().setBorder(new EmptyBorder(5, 5, 5, 5));
+			applyRoundCorners(label);
 			add(label);
 			pack();
 			centerOnParent();
@@ -2039,6 +2517,12 @@ public class GuiUtils {
 
 		private MenuItems() {}
 
+		public static JMenuItem brainAreaAnalysis() {
+			final JMenuItem jmi = new JMenuItem("Brain Area Analysis...", IconFactory.getMenuIcon(GLYPH.BRAIN));
+			jmi.setToolTipText("Distribution analyisis of projection patterns across brain areas.");
+			return jmi;
+		}
+
 		public static JMenuItem devResourceMain() {
 			final JMenuItem jmi = menuItemTriggeringURL("Scripting Documentation", "https://imagej.net/plugins/snt/scripting");
 			jmi.setIcon(IconFactory.getMenuIcon(GLYPH.CODE));
@@ -2067,6 +2551,12 @@ public class GuiUtils {
 		public static JMenuItem createDendrogram() {
 			final JMenuItem jmi = new JMenuItem("Create Dendrogram", IconFactory.getMenuIcon(GLYPH.DIAGRAM));
 			jmi.setToolTipText("Display reconstructions in Graph Viewer");
+			return jmi;
+		}
+
+		public static JMenuItem createAnnotionGraph() {
+			final JMenuItem jmi = new JMenuItem("Create Annotation Graph...", IconFactory.getMenuIcon(GLYPH.BRAIN));
+			jmi.setToolTipText("Flow Plots and Ferris-Wheel diagrams from annoated trees");
 			return jmi;
 		}
 

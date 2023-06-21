@@ -2,7 +2,7 @@
  * #%L
  * Fiji distribution of ImageJ for the life sciences.
  * %%
- * Copyright (C) 2010 - 2022 Fiji developers.
+ * Copyright (C) 2010 - 2023 Fiji developers.
  * %%
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as
@@ -46,16 +46,15 @@ import java.io.*;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Paths;
-import java.text.SimpleDateFormat;
 import java.util.*;
 import java.util.Map.Entry;
 import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 import javax.swing.*;
 import javax.swing.Timer;
 import javax.swing.border.Border;
-import javax.swing.event.ListSelectionEvent;
 import javax.swing.tree.DefaultMutableTreeNode;
 import javax.swing.tree.DefaultTreeCellRenderer;
 import javax.swing.tree.DefaultTreeModel;
@@ -132,13 +131,10 @@ import org.scijava.command.CommandService;
 import org.scijava.display.DisplayService;
 import org.scijava.plugin.Parameter;
 import org.scijava.prefs.PrefService;
-import org.scijava.ui.UIService;
 import org.scijava.ui.awt.AWTWindows;
-import org.scijava.ui.swing.script.TextEditor;
 import org.scijava.util.*;
 
 import com.jidesoft.swing.CheckBoxList;
-import com.jidesoft.swing.CheckBoxListSelectionModel;
 import com.jidesoft.swing.CheckBoxTree;
 import com.jidesoft.swing.ListSearchable;
 import com.jidesoft.swing.SearchableBar;
@@ -175,6 +171,7 @@ import sc.fiji.snt.gui.MeasureUI;
 import sc.fiji.snt.gui.IconFactory.GLYPH;
 import sc.fiji.snt.gui.SNTSearchableBar;
 import sc.fiji.snt.gui.SaveMeasurementsCmd;
+import sc.fiji.snt.gui.ScriptRecorder;
 import sc.fiji.snt.gui.cmds.*;
 import sc.fiji.snt.io.FlyCircuitLoader;
 import sc.fiji.snt.io.MouseLightLoader;
@@ -243,7 +240,7 @@ public class Viewer3D {
 		@Deprecated
 		TOP("Top Constrained", DefCoords.XY);
 
-		private String description;
+		private final String description;
 		private Coord3d coord;
 
 		private ViewMode next() {
@@ -277,18 +274,18 @@ public class Viewer3D {
 		}
 	}
 
-	private final static String MESH_LABEL_ALLEN = "Whole Brain (CCFv" + AllenUtils.VERSION + ")";
-	private final static String MESH_LABEL_ZEBRAFISH = "Outline (MP ZBA)";
-	private final static String MESH_LABEL_JFRC2018 = "JFRC 2018";
-	private final static String MESH_LABEL_JFRC2 = "JFRC2 (VFB)";
-	private final static String MESH_LABEL_JFRC3 = "JFRC3";
-	private final static String MESH_LABEL_FCWB = "FCWB";
-	private final static String MESH_LABEL_VNS = "VNS";
-	private final static String MESH_LABEL_L1 = "L1";
-	private final static String MESH_LABEL_L3 = "L3";
+	private static final String MESH_LABEL_ALLEN = "Whole Brain (CCFv" + AllenUtils.VERSION + ")";
+	private static final String MESH_LABEL_ZEBRAFISH = "Outline (MP ZBA)";
+	private static final String MESH_LABEL_JFRC2018 = "JFRC 2018";
+	private static final String MESH_LABEL_JFRC2 = "JFRC2 (VFB)";
+	private static final String MESH_LABEL_JFRC3 = "JFRC3";
+	private static final String MESH_LABEL_FCWB = "FCWB";
+	private static final String MESH_LABEL_VNS = "VNS";
+	private static final String MESH_LABEL_L1 = "L1";
+	private static final String MESH_LABEL_L3 = "L3";
 
-	private final static String PATH_MANAGER_TREE_LABEL = "Path Manager Contents";
-	protected final static float DEF_NODE_RADIUS = 3f;
+	private static final String PATH_MANAGER_TREE_LABEL = "Path Manager Contents";
+	protected static final float DEF_NODE_RADIUS = 3f;
 	private static final Color DEF_COLOR = new Color(1f, 1f, 1f, 0.05f);
 	private static final Color INVERTED_DEF_COLOR = new Color(0f, 0f, 0f, 0.05f);
 
@@ -341,6 +338,7 @@ public class Viewer3D {
 
 	@Parameter
 	private PrefService prefService;
+	private ScriptRecorder recorder;
 
 	private Viewer3D(final Engine engine) {
 		SNTUtils.log("Initializing Viewer3D...");
@@ -548,7 +546,7 @@ public class Viewer3D {
 			view.setCameraMode(currentCameraMode);
 			view.getCamera().setViewportMode(viewPortMode);
 			view.setViewPoint(currentViewPoint);
-			view.setBoundManual(currentBox);
+			view.setBoundsManual(currentBox);
 			addAllObjects();
 			updateView();
 			setAnimationEnabled(isAnimating);
@@ -778,6 +776,16 @@ public class Viewer3D {
 		chart.getQuality().setAnimated(true);
 	}
 
+	/**
+	 * 
+	 *
+	 * @param cmd the recorded command
+	 */
+	public void runCommand(final String cmd) {
+		cmdFinder.runCommand(cmd);
+	}
+
+
 	private void addAllObjects() {
 		if (cBar != null) {
 			cBar.updateColors();
@@ -797,8 +805,8 @@ public class Viewer3D {
 	private void initManagerList() {
 		managerList = new CheckboxListEditable(new DefaultUpdatableListModel<>());
 		managerList.getCheckBoxListSelectionModel().addListSelectionListener(e -> {
-			if (!e.getValueIsAdjusting() && managerList.isVisible()) {
-				final List<String> selectedKeys = managerList.getCheckBoxListSelectedValues(e);
+			if (!e.getValueIsAdjusting() && getManagerPanel() != null) {
+				final Set<String> selectedKeys = getLabelsCheckedInManagerAsSet();
 				plottedTrees.forEach((k, shapeTree) -> {
 					shapeTree.setDisplayed(selectedKeys.contains(k));
 				});
@@ -1021,18 +1029,18 @@ public class Viewer3D {
 	 * @return the Tree list
 	 */
 	public List<Tree> getTrees(final boolean visibleOnly) {
+		final ArrayList<Tree> trees;
 		if (visibleOnly) {
-			final ArrayList<Tree> trees = new ArrayList<>();
+			trees = new ArrayList<>();
 			plottedTrees.forEach((k, shapeTree) -> {
 				if (shapeTree.isDisplayed())
 					trees.add(shapeTree.tree);
 			});
-			return trees;
 		} else {
-			final ArrayList<Tree> trees = new ArrayList<>(plottedTrees.values().size());
+			trees = new ArrayList<>(plottedTrees.values().size());
 			plottedTrees.values().forEach(shapeTree -> trees.add(shapeTree.tree));
-			return trees;
 		}
+		return trees;
 	}
 
 	/**
@@ -1052,18 +1060,18 @@ public class Viewer3D {
 	 * @return the mesh list
 	 */
 	public List<OBJMesh> getMeshes(final boolean visibleOnly) {
+		final ArrayList<OBJMesh> meshes;
 		if (visibleOnly) {
-			final ArrayList<OBJMesh> meshes = new ArrayList<>();
+			meshes = new ArrayList<>();
 			plottedObjs.values().forEach( vbo -> {
 				if (vbo.isDisplayed())
 					meshes.add(vbo.objMesh);
 			});
-			return meshes;
 		} else {
-			final ArrayList<OBJMesh> meshes = new ArrayList<>(plottedObjs.values().size());
+			meshes = new ArrayList<>(plottedObjs.values().size());
 			plottedObjs.values().forEach( vbo -> meshes.add(vbo.objMesh));
-			return meshes;
 		}
+		return meshes;
 	}
 
 	/**
@@ -1101,7 +1109,7 @@ public class Viewer3D {
 	 * 				 returned {@link Annotation3D} object.
 	 * @return the {@link Annotation3D}
 	 */
-	public Annotation3D annotateSurface(final Collection<? extends SNTPoint> points, final String label, boolean computeVolume) {
+	public Annotation3D annotateSurface(final Collection<? extends SNTPoint> points, final String label, final boolean computeVolume) {
 		Annotation3D annotation;
 		if (computeVolume) {
 			annotation = new Annotation3D(this, points, Annotation3D.SURFACE_AND_VOLUME);
@@ -1279,7 +1287,7 @@ public class Viewer3D {
 				composite.add(getDrawableFromObject(o));
 			}
 			return composite;
-		} else {
+		} else if (!CheckBoxList.ALL_ENTRY.equals(object)) {
 			throw new IllegalArgumentException("Unsupported object: " + object.getClass().getName());
 		}
 		return null;
@@ -1436,6 +1444,7 @@ public class Viewer3D {
 		updateView();
 		frame.canvas.requestFocusInWindow();
 		frame.setVisible(true);
+		gUtils.notifyIfNewVersion(0);
 		return frame;
 	}
 
@@ -1493,10 +1502,10 @@ public class Viewer3D {
 		if (frame != null) {
 			SwingUtilities.invokeLater(() -> {
 				if (msg == null || msg.isEmpty()) {
-					frame.status.setText(ViewerFrame.STATUS_PLACEHOLDER);
+					frame.status.setText(frame.STATUS_PLACEHOLDER);
 					return;
 				}
-				final Timer timer = new Timer(msecs, e -> frame.status.setText(ViewerFrame.STATUS_PLACEHOLDER));
+				final Timer timer = new Timer(msecs, e -> frame.status.setText(frame.STATUS_PLACEHOLDER));
 				timer.setRepeats(false);
 				timer.start();
 				frame.status.setText(msg);
@@ -1628,7 +1637,7 @@ public class Viewer3D {
 		final Iterator<Tree> it = getTrees().iterator();
 		setSceneUpdatesEnabled(false);
 		while (it.hasNext()) {
-			Tree tree = it.next();
+			final Tree tree = it.next();
 			removeTree(tree);
 			it.remove();
 		}
@@ -1671,13 +1680,13 @@ public class Viewer3D {
 	}
 
 	private void removeSceneObject(final String label, final String managerEntry) {
-		if (!removeTree(label, managerEntry)) {
-			if (!removeMesh(label, managerEntry))
-				removeDrawable(getAnnotationDrawables(), label, managerEntry);
+		if (!removeTree(label, managerEntry) && (!removeMesh(label, managerEntry))) {
+			removeDrawable(getAnnotationDrawables(), label, managerEntry);
 		}
 	}
 
 	private void wipeScene() {
+		final Dimension dim = frame.getSize();
 		removeAllTrees();
 		removeAllMeshes();
 		removeAllAnnotations();
@@ -1688,6 +1697,8 @@ public class Viewer3D {
 			frame.lightController.dispose();
 			frame.lightController = null;
 		}
+		// Workaround the possibility of a canvas collapse when empty(MacOS only!?)
+		if (frame.getSize().height< dim.getSize().height) frame.setSize(dim);
 	}
 
 	private boolean isEmptyScene() {
@@ -1700,7 +1711,7 @@ public class Viewer3D {
 
 	/**
 	 * Script friendly method to add a supported object ({@link Tree},
-	 * {@link OBJMesh}, {@link AbstractDrawable}, etc.) to this viewer. Note that
+	 * {@link OBJMesh}, AbstractDrawable, etc.) to this viewer. Note that
 	 * collections of supported objects are also supported, which is an effective
 	 * way of adding multiple items since the scene is only rebuilt once all items
 	 * have been added.
@@ -1758,7 +1769,7 @@ public class Viewer3D {
 
 	/**
 	 * Script friendly method to remove an object ({@link Tree}, {@link OBJMesh},
-	 * {@link AbstractDrawable}, {@link String} (object label), etc.) from this viewer's scene.
+	 * AbstractDrawable, {@link String} (object label), etc.) from this viewer's scene.
 	 *
 	 * @param object the object to be removed, or the unique String identifying it.
 	 *               Collections supported.
@@ -1797,14 +1808,21 @@ public class Viewer3D {
 	}
 
 	@SuppressWarnings("unchecked")
-	private List<String> getLabelsCheckedInManager() {
+	private List<String> getLabelsCheckedInManagerAsList() {
 		final Object[] values = managerList.getCheckBoxListSelectedValues();
 		return (List<String>) (List<?>) Arrays.asList(values);
 	}
 
+	@SuppressWarnings("unchecked")
+	private Set<String> getLabelsCheckedInManagerAsSet() {
+		// contains() is O(1) in Set compared to O(n) in list
+		final Object[] values = managerList.getCheckBoxListSelectedValues();
+		return (Set<String>) (Set<?>) Arrays.stream(values).collect(Collectors.toSet());
+	}
+
 	private <T extends Drawable> boolean allDrawablesRendered(
 		final BoundingBox3d viewBounds, final Map<String, T> map,
-		final List<String> selectedKeys)
+		final Set<String> selectedKeys)
 	{
 		final Iterator<Entry<String, T>> it = map.entrySet().iterator();
 		while (it.hasNext()) {
@@ -1849,19 +1867,19 @@ public class Viewer3D {
 	public boolean syncPathManagerList() throws UnsupportedOperationException {
 		if (SNTUtils.getPluginInstance() == null) throw new IllegalArgumentException(
 			"SNT is not running.");
-		final Tree tree = new Tree(SNTUtils.getPluginInstance().getPathAndFillManager()
-			.getPathsFiltered());
+		final Collection<Tree> trees = SNTUtils.getPluginInstance().getPathAndFillManager().getTrees();
+		final ShapeTree newShapeTree = new MultiTreeShapeTree(trees);
 		if (plottedTrees.containsKey(PATH_MANAGER_TREE_LABEL)) {
 			chart.getScene().getGraph().remove(plottedTrees.get(
 				PATH_MANAGER_TREE_LABEL).get());
-			final ShapeTree newShapeTree = new ShapeTree(tree);
 			plottedTrees.replace(PATH_MANAGER_TREE_LABEL, newShapeTree);
-			chart.add(newShapeTree.get(), viewUpdatesEnabled);
 		}
 		else {
-			tree.setLabel(PATH_MANAGER_TREE_LABEL);
-			addTree(tree);
+			plottedTrees.put(PATH_MANAGER_TREE_LABEL, newShapeTree);
+			addItemToManager(PATH_MANAGER_TREE_LABEL);
+			newShapeTree.setDisplayed(true);
 		}
+		chart.add(newShapeTree.get(), viewUpdatesEnabled);
 		updateView();
 		return plottedTrees.get(PATH_MANAGER_TREE_LABEL).get().isDisplayed();
 	}
@@ -1876,7 +1894,7 @@ public class Viewer3D {
 			updateView();
 			if (managerList == null) return true;
 			// now check that everything is visible
-			final List<String> selectedKeys = getLabelsCheckedInManager();
+			final Set<String> selectedKeys = getLabelsCheckedInManagerAsSet();
 			final BoundingBox3d viewBounds = chart.view().getBounds();
 			return allDrawablesRendered(viewBounds, plottedObjs, selectedKeys) &&
 				allDrawablesRendered(viewBounds, getTreeDrawables(), selectedKeys) &&
@@ -1989,7 +2007,7 @@ public class Viewer3D {
 	{
 		final BoundingBox3d bBox = new BoundingBox3d(xMin, xMax, yMin, yMax, zMin,
 			zMax);
-		chart.view().setBoundManual(bBox);
+		chart.view().setBoundsManual(bBox);
 		if (viewUpdatesEnabled) chart.view().shoot();
 	}
 
@@ -2138,8 +2156,7 @@ public class Viewer3D {
 	 * @return true, if successful
 	 */
 	public boolean saveSnapshot() {
-		final String filename = new SimpleDateFormat("'SNT 'yyyy-MM-dd HH-mm-ss'.png'")
-				.format(new Date());
+		final String filename = String.format("RecViewer%s.png", SNTUtils.getTimeStamp());
 		final File file = new File(prefs.getSnapshotDir(), filename);
 		boolean saved = false;
 		try {
@@ -2187,7 +2204,7 @@ public class Viewer3D {
 		}
 		SNTUtils.log("Saving snapshot to " + file);
 		if (SNTUtils.isDebugMode() && frame != null) {
-			logSceneControls();
+			logSceneControls(false);
 		}
 		chart.screenshot(file);
 		return true;
@@ -2234,7 +2251,7 @@ public class Viewer3D {
 	 * @throws IllegalArgumentException if mesh could not be compiled
 	 */
 	public boolean addMesh(final OBJMesh objMesh) throws IllegalArgumentException {
-		return (objMesh == null) ? false : loadOBJMesh(objMesh) != null;
+		return (objMesh != null) && loadOBJMesh(objMesh) != null;
 	}
 
 	private OBJMesh loadOBJMesh(final OBJMesh objMesh) {
@@ -2271,7 +2288,7 @@ public class Viewer3D {
 	}
 
 	private OBJMesh loadRefBrainInternal(final String label) throws NullPointerException, IllegalArgumentException {
-		if (getOBJs().keySet().contains(label)) {
+		if (getOBJs().containsKey(label)) {
 			setVisible(label, true);
 			if (managerList != null)
 				managerList.addCheckBoxListSelectedValue(label, true);
@@ -2365,12 +2382,24 @@ public class Viewer3D {
 	}
 
 	/**
-	 * Logs API calls controlling the scene (view point, bounds, etc.) to Console.
-	 * Useful for programmatic control of animations.
+	 * Logs API calls controlling the scene (view point, bounds, etc.) to Script
+	 * Recorder (or Console if Script Recorder is not running). Useful for
+	 * programmatic control of animations.
 	 */
 	public void logSceneControls() {
-		SNTUtils.log("Logging scene controls:");
-		final StringBuilder sb = new StringBuilder("\n");
+		logSceneControls(false);
+	}
+
+	private void logSceneControls(final boolean abortIfRecorderNull) {
+		if (abortIfRecorderNull && recorder == null) {
+			gUtils.error("Script recorder is not running.");
+			return;
+		}
+		final StringBuilder sb = new StringBuilder();
+		if (recorder == null) {
+			SNTUtils.log("Logging scene controls:");
+			sb.append("\n");
+		}
 		final HashSet<String> visibleActors = new HashSet<>();
 		final HashSet<String> hiddenActors = new HashSet<>();
 		plottedTrees.forEach((k, shapeTree) -> {
@@ -2385,26 +2414,18 @@ public class Viewer3D {
 			if (annot.getDrawable().isDisplayed()) visibleActors.add("\"" + k +"\"");
 			else hiddenActors.add("\"" + k +"\"");
 		});
-		if (!visibleActors.isEmpty()) {
-			sb.append("Visible objects: ").append(visibleActors.toString());
-			sb.append("\n");
-		}
-		if (!hiddenActors.isEmpty()) {
-			sb.append("Hidden  objects: ").append(hiddenActors.toString());
-			sb.append("\n");
-		}
 		if (frame != null) {
 			sb.append("viewer.setFrameSize(");
-			sb.append(frame.getWidth()).append(", ").append(frame.getHeight()).append(");");
+			sb.append(frame.getWidth()).append(", ").append(frame.getHeight()).append(")");
 			sb.append("\n");
 		}
 		if (currentView == ViewMode.XY) {
-			sb.append("viewer.setViewMode(\"xy\");");
+			sb.append("viewer.setViewMode(\"xy\")");
 		} else {
 			final Coord3d viewPoint = view.getViewPoint();
 			sb.append("viewer.setViewPoint(");
 			sb.append(viewPoint.x).append(", ");
-			sb.append(viewPoint.y).append(");");
+			sb.append(viewPoint.y).append(")");
 		}
 		sb.append("\n");
 		final BoundingBox3d bounds = view.getBounds();
@@ -2414,10 +2435,26 @@ public class Viewer3D {
 		sb.append(bounds.getYmin()).append(", ");
 		sb.append(bounds.getYmax()).append(", ");
 		sb.append(bounds.getZmin()).append(", ");
-		sb.append(bounds.getZmax()).append(");");
+		sb.append(bounds.getZmax()).append(")");
 		sb.append("\n");
-		System.out.println(sb.toString());
-		displayMsg("Scene details output to Console");
+		if (recorder == null) {
+			if (!visibleActors.isEmpty()) {
+				sb.append("Visible objects: ").append(visibleActors.toString());
+				sb.append("\n");
+			}
+			if (!hiddenActors.isEmpty()) {
+				sb.append("Hidden  objects: ").append(hiddenActors.toString());
+				sb.append("\n");
+			}
+			System.out.println(sb.toString());
+			displayMsg("Scene details output to Console");
+		} else {
+			if (!visibleActors.isEmpty())
+				recorder.recordComment("Visible objects: " + visibleActors.toString());
+			if (!hiddenActors.isEmpty())
+				recorder.recordComment("Hidden objects: " + hiddenActors.toString());
+			recorder.recordCmd(sb.toString());
+		}
 	}
 
 //	/**
@@ -2543,7 +2580,7 @@ public class Viewer3D {
 		private final ColorTableMapper mapper;
 		private final int precision;
 
-		private ColorLegend(ColorLegend colorLegend, final Chart chart) {
+		private ColorLegend(final ColorLegend colorLegend, final Chart chart) {
 			super(new Shape(), chart);
 			shape = (Shape) drawable;
 			this.font = colorLegend.font;
@@ -2618,12 +2655,12 @@ public class Viewer3D {
 			final ITickProvider provider, final ITickRenderer renderer)
 		{
 			if (shape != null) imageGenerator = new ColorbarImageGenerator(shape
-				.getColorMapper(), provider, renderer, font.getSize());
+					.getColorMapper(), provider, renderer, font.getSize());
 		}
 
 	}
 
-	private class ColorbarImageGenerator extends AWTColorbarImageGenerator {
+	private static class ColorbarImageGenerator extends AWTColorbarImageGenerator {
 
 		public ColorbarImageGenerator(final ColorMapper mapper,
 			final ITickProvider provider, final ITickRenderer renderer,
@@ -2679,7 +2716,7 @@ public class Viewer3D {
 		private static final long serialVersionUID = 1L;
 		private static final int DEF_WIDTH = 800;
 		private static final int DEF_HEIGHT = 600;
-		private static final String STATUS_PLACEHOLDER = "Press H (or F1) for Help. Press Ctrl+Shift+P for Command Palette...";
+		private final String STATUS_PLACEHOLDER = "Press H (or F1) for Help. Press " + GuiUtils.ctrlKey() + "+Shift+P for Command Palette...";
 
 		private AChart chart;
 		private Component canvas;
@@ -2719,6 +2756,8 @@ public class Viewer3D {
 			else
 				AWTWindows.centerWindow(gConfiguration.getBounds(), this);
 			//setLocationRelativeTo(null); // ensures frame will not appear in between displays on a multidisplay setup
+			setMinimumSize(new Dimension((int) (DEF_WIDTH * .5), (int) (DEF_HEIGHT * .5))); // fix MacOS issue in which
+																							// frame is collapsed
 			if (includeManager) {
 				manager = getManager();
 				chart.viewer.managerList.selectAll();
@@ -2809,7 +2848,7 @@ public class Viewer3D {
 			this.chart = (AChart)chart;
 			canvas = (Component) chart.getCanvas();
 			setTitle(title);
-			BorderLayout layout = new BorderLayout();
+			final BorderLayout layout = new BorderLayout();
 			setLayout(layout);
 			add(canvas, BorderLayout.CENTER);
 			add(status = new JLabel(STATUS_PLACEHOLDER), BorderLayout.SOUTH);
@@ -2818,7 +2857,10 @@ public class Viewer3D {
 			status.setForeground(toAWTColor(chart.view().getBackgroundColor().negative()));
 			setBackground(status.getBackground());
 			pack();
-			setSize(new Dimension(bounds.width, bounds.height));
+			canvas.setPreferredSize(new Dimension(bounds.width, bounds.height));
+			setPreferredSize(new Dimension(bounds.width, bounds.height + status.getHeight()));
+			canvas.setSize(new Dimension(bounds.width, bounds.height));
+			setSize(new Dimension(bounds.width, bounds.height + status.getHeight()));
 			if (firstInitialization) {
 				addWindowListener(new WindowAdapter() {
 					@Override
@@ -2835,6 +2877,8 @@ public class Viewer3D {
 			ViewerFrame.this.chart.dispose();
 			ViewerFrame.this.chart = null;
 			if (ViewerFrame.this.manager != null) ViewerFrame.this.manager.dispose();
+			if (recorder != null)
+				recorder.dispose();
 			ViewerFrame.this.dispose();
 		}
 
@@ -3044,7 +3088,6 @@ public class Viewer3D {
 			retrieveAllIfNoneSelected = DEF_RETRIEVE_ALL_IF_NONE_SELECTED;
 			treeCompartmentChoice = DEF_TREE_COMPARTMENT_CHOICE;
 			setSnapshotDirectory();
-			SNTChart.setDefaultFontScale(SCALE_FACTOR);
 			if (tp.prefService == null) {
 				kc.zoomStep = DEF_ZOOM_STEP;
 				kc.rotationStep = DEF_ROTATION_STEP;
@@ -3058,11 +3101,6 @@ public class Viewer3D {
 			}
 		}
 
-		private String getScriptExtension() {
-			return tp.prefService.get(RecViewerPrefsCmd.class, "scriptExtension",
-					RecViewerPrefsCmd.DEF_SCRIPT_EXTENSION);
-		}
-
 		private File getSnapshotDir() {
 			if (snapshotDir == null)
 				snapshotDir = RecViewerPrefsCmd.DEF_SNAPSHOT_DIR;
@@ -3070,17 +3108,6 @@ public class Viewer3D {
 			if (!file.exists() || !file.isDirectory())
 				file.mkdirs();
 			return file;
-		}
-	
-		private String getBoilerplateScript(final String ext) {
-			final HashMap<String, String> map = new HashMap<>();
-			map.put(".bsh", "BSH.bsh");
-			map.put(".groovy", "GVY.groovy");
-			map.put(".py", "PY.py");
-			final ClassLoader classloader = Thread.currentThread().getContextClassLoader();
-			final InputStream is = classloader.getResourceAsStream("script_templates/Neuroanatomy/Boilerplate/"
-					+ map.get(ext));
-			return  new BufferedReader(new InputStreamReader(is)).lines().collect(Collectors.joining("\n"));
 		}
 
 		private void setSnapshotDirectory() {
@@ -3162,7 +3189,7 @@ public class Viewer3D {
 			return splitDendritesFromAxons;
 		}
 
-		public void setSplitDendritesFromAxons(boolean splitDendritesFromAxons) {
+		public void setSplitDendritesFromAxons(final boolean splitDendritesFromAxons) {
 			this.splitDendritesFromAxons = splitDendritesFromAxons;
 		}
 
@@ -3176,6 +3203,22 @@ public class Viewer3D {
 	 */
 	public ManagerPanel getManagerPanel() {
 		return (frame == null) ? null : frame.managerPanel;
+	}
+
+	public ScriptRecorder getRecorder(final boolean createIfNeeded) {
+		if (recorder == null && createIfNeeded) {
+			recorder = new ScriptRecorder();
+			recorder.setTitle("Reconstruction Viewer Script Recorder");
+			cmdFinder.setRecorder(recorder);
+			recorder.addWindowListener(new WindowAdapter() {
+				@Override
+				public void windowClosed(final WindowEvent e) {
+					recorder = null;
+					cmdFinder.setRecorder(null);
+				}
+			});
+		}
+		return recorder;
 	}
 
 	public class ManagerPanel extends JPanel {
@@ -3274,7 +3317,7 @@ public class Viewer3D {
 		}
 
 	 	/** Updates the progress bar. */
-		public void showProgress(int value, int maximum) {
+		public void showProgress(final int value, final int maximum) {
 			if (value == -1 && maximum == -1) {
 				progressBar.setIndeterminate(true);
 			} else {
@@ -3295,6 +3338,13 @@ public class Viewer3D {
 				setStringPainted(true);
 				setFocusable(false);
 				reset();
+				addMouseListener(new MouseAdapter() {
+					@Override
+					public void mousePressed(final MouseEvent e) {
+						if (e.getClickCount() == 2 && isIndeterminate())
+							showProgress(0, 0);
+					}
+				});
 			}
 
 			private void addToGlobalValue(final int increment) {
@@ -3328,7 +3378,7 @@ public class Viewer3D {
 
 			@Override
 			public boolean isIndeterminate() {
-			    return super.isIndeterminate() || globalMax < 0;
+				return super.isIndeterminate() || globalMax < 0;
 			}
 	
 			@Override
@@ -3360,18 +3410,19 @@ public class Viewer3D {
 
 		class Action extends AbstractAction {
 			static final String ALL = "All";
+			static final String RESIZE = "Viewer Size...";
 			static final String ENTER_FULL_SCREEN = "Full Screen";
 			static final String FIND = "Toggle Selection Toolbar";
 			static final String PROGRESS = "Toggle Progress Bar";
 			static final String FIT = "Fit to Visible Objects";
-			static final String LOG = "Log Scene Details";
+			static final String LOG_TO_RECORDER = "Log Scene Details to Recorder";
 			static final String NONE = "None";
 			static final String REBUILD = "Rebuild Scene...";
 			static final String RELOAD = "Reload Scene";
 			static final String RESET_VIEW = "Reset View";
 			static final String SCENE_SHORTCUTS_LIST = "Scene Shortcuts...";
 			static final String SCENE_SHORTCUTS_NOTIFICATION = "Scene Shortcuts (Notification)...";
-			static final String SCRIPT = "Script This Viewer";
+			static final String RECORDER = "Record Script... (Experimental)";
 			static final String SNAPSHOT = "Take Snapshot";
 			static final String SYNC = "Sync Path Manager Changes";
 			static final String TAG = "Add Tag(s)...";
@@ -3422,16 +3473,14 @@ public class Viewer3D {
 				case ENTER_FULL_SCREEN:
 					frame.enterFullScreen();
 					return;
+				case RESIZE:
+					guiUtils.adjustComponentThroughPrompt(frame);
+					return;
 				case FIT:
 					fitToVisibleObjects(true, true);
 					return;
-				case LOG:
-					logSceneControls();
-					try {
-						context.getService(UIService.class).getDefaultUI().getConsolePane().show();
-					} catch (final NullPointerException ignored) {
-						// do nothing
-					}
+				case LOG_TO_RECORDER:
+					logSceneControls(true);
 					break;
 				case NONE:
 					showPanelAsNeeded();
@@ -3460,8 +3509,8 @@ public class Viewer3D {
 				case SCENE_SHORTCUTS_NOTIFICATION:
 					 keyController.showHelp(false);
 					 return;
-				case SCRIPT:
-					runScriptEditor(prefs.getScriptExtension());
+				case RECORDER:
+					openRecorder();
 					return;
 				case SNAPSHOT:
 					keyController.saveScreenshot();
@@ -3516,6 +3565,27 @@ public class Viewer3D {
 				if (frame.manager != null && !frame.manager.isVisible())
 					toggleControlPanel(); // e.g, if action called via cmdFinder
 			}
+
+			private void openRecorder() {
+				if (getRecorder(false) != null) {
+					guiUtils.error("Script Recorder is already open.");
+					return;
+				}
+				final StringBuilder sb = new StringBuilder();
+				sb.append("Rec. Viewer's API: https://javadoc.scijava.org/SNT/index.html?sc/fiji/snt/viewer/Viewer3D.html\n");
+				sb.append("Tip: Scene details can be printed to Console using `viewer.logSceneControls()` or recorded to\n");
+				sb.append("by pressing 'L' when viewer is frontmost\n\n");
+				getRecorder(true).recordComment(sb.toString());
+				sb.setLength(0);
+				sb.append("viewer = snt.getRecViewer(");
+				if (!isSNTInstance())
+					sb.append(getID());
+				sb.append(")");
+				recorder.recordCmd(sb.toString());
+				SwingUtilities.invokeLater(() -> recorder.setVisible(true));
+				return;
+			}
+
 		}
 
 		private JPanel buttonPanel() {
@@ -3543,7 +3613,7 @@ public class Viewer3D {
 		private JButton menuButton(final GLYPH glyph, final JPopupMenu menu, final String tooltipMsg) {
 			final JButton button = new JButton(IconFactory.getButtonIcon(glyph));
 			button.setToolTipText(tooltipMsg);
-			registerMenuInCmdFinder(menu, new ArrayList<>(Arrays.asList(tooltipMsg)));
+			registerMenuInCmdFinder(menu, new ArrayList<>(Collections.singletonList(tooltipMsg)));
 			button.addActionListener(e -> menu.show(button, button.getWidth() / 2, button.getHeight() / 2));
 			return button;
 		}
@@ -3555,14 +3625,21 @@ public class Viewer3D {
 			sceneMenu.add(fit);
 			final JMenuItem fitToSelection = new JMenuItem("Fit To Selection", IconFactory.getMenuIcon(GLYPH.CROSSHAIR));
 			fitToSelection.addActionListener(e -> {
-				final List<?> selection = managerList.getSelectedValuesList();
-				if (selection.isEmpty())
-					guiUtils.error("No Items are currently selected.");
-				else
-					zoomTo(selection);
+				List<?> selection = managerList.getSelectedValuesList();
+				if (selection.isEmpty()) {
+					guiUtils.error("No items are currently selected.");
+					return;
+				}
+				if (selection.size() == 1 && CheckBoxList.ALL_ENTRY.equals(selection.get(0))) {
+					selection.clear();
+					selection = IntStream.range(0, managerList.getModel().getSize())
+							.mapToObj(managerList.getModel()::getElementAt).collect(Collectors.toList());
+				}
+				zoomTo(selection);
 			});
 			sceneMenu.add(fitToSelection);
 			// Aspect-ratio controls
+			sceneMenu.add(squarifyMenu());
 			final JMenuItem jcbmiFill = new JCheckBoxMenuItem("Stretch-to-Fill");
 			jcbmiFill.setIcon(IconFactory.getMenuIcon(GLYPH.EXPAND_ARROWS1));
 			jcbmiFill.addItemListener(e -> {
@@ -3571,7 +3648,9 @@ public class Viewer3D {
 				view.getCamera().setViewportMode(mode);
 			});
 			sceneMenu.add(jcbmiFill);
-			sceneMenu.add(squarifyMenu());
+			final JMenuItem resize = new JMenuItem(new Action(Action.RESIZE));
+			resize.setIcon(IconFactory.getMenuIcon(GLYPH.RESIZE));
+			sceneMenu.add(resize);
 			final JMenuItem fullScreen = new JMenuItem(new Action(Action.ENTER_FULL_SCREEN, KeyEvent.VK_F, false, true));
 			fullScreen.setIcon(IconFactory.getMenuIcon(GLYPH.EXPAND_ARROWS2));
 			sceneMenu.add(fullScreen);
@@ -3586,7 +3665,7 @@ public class Viewer3D {
 			final JMenuItem rebuild = new JMenuItem(new Action(Action.REBUILD, KeyEvent.VK_R, true, true));
 			rebuild.setIcon(IconFactory.getMenuIcon(GLYPH.RECYCLE));
 			sceneMenu.add(rebuild);
-			JMenuItem wipe = new JMenuItem("Wipe Scene...", IconFactory.getMenuIcon(GLYPH.DANGER));
+			final JMenuItem wipe = new JMenuItem("Wipe Scene...", IconFactory.getMenuIcon(GLYPH.DANGER));
 			wipe.addActionListener(e -> wipeScene());
 			sceneMenu.add(wipe);
 			sceneMenu.addSeparator();
@@ -3610,7 +3689,7 @@ public class Viewer3D {
 						try {
 							final Viewer3D dup = get();
 							dup.show();
-							dup.view.setBoundManual(view.getBounds().clone());
+							dup.view.setBoundsManual(view.getBounds().clone());
 						} catch (final OutOfMemoryError e1) {
 							e1.printStackTrace();
 							guiUtils.error("There is not enough memory to complete command. See Console for details.");
@@ -3654,8 +3733,8 @@ public class Viewer3D {
 					if (menuText != null) newPath.add(menuText);
 					registerMenuInCmdFinder((JMenu)component, newPath);
 				}
-				else if (component instanceof JMenuItem) {
-					cmdFinder.register((JMenuItem)component, path);
+				else if (component instanceof AbstractButton) {
+					cmdFinder.register((AbstractButton)component, path);
 				}
 
 			}
@@ -3764,7 +3843,7 @@ public class Viewer3D {
 			hideMeshes.addActionListener(e -> hide(plottedTrees));
 			final JMenuItem hideTrees = new JMenuItem("Trees");
 			hideTrees.addActionListener(e -> {
-				setArborsDisplayed(getLabelsCheckedInManager(), false);
+				setArborsDisplayed(getLabelsCheckedInManagerAsSet(), false);
 			});
 			final JMenuItem hideAnnotations = new JMenuItem("Annotations");
 			hideAnnotations.addActionListener(e -> hide(plottedAnnotations));
@@ -3858,7 +3937,7 @@ public class Viewer3D {
 			pMenu.add(sort);
 			pMenu.addSeparator();
 			pMenu.add(remove);
-			registerMenuInCmdFinder(pMenu, new ArrayList<>(Arrays.asList("Control Panel Contextual Menu")));
+			registerMenuInCmdFinder(pMenu, new ArrayList<>(Collections.singletonList("Control Panel Contextual Menu")));
 			return pMenu;
 		}
 
@@ -3871,7 +3950,7 @@ public class Viewer3D {
 		}
 
 		private void displaySomas(final boolean displayed) {
-			final List<String> labels = getLabelsCheckedInManager();
+			final Set<String> labels = getLabelsCheckedInManagerAsSet();
 			if (labels.isEmpty()) {
 				displayMsg("There are no visible reconstructions");
 				return;
@@ -3880,7 +3959,7 @@ public class Viewer3D {
 		}
 
 		private void displayMeshBoundingBoxes(final boolean display) {
-			final List<String> labels = getLabelsCheckedInManager();
+			final Set<String> labels = getLabelsCheckedInManagerAsSet();
 			if (labels.isEmpty()) {
 				displayMsg("There are no items selected");
 				return;
@@ -3943,14 +4022,17 @@ public class Viewer3D {
 		}
 
 		private void hide(final Map<String, ?> map) {
-			final List<String> selectedKeys = new ArrayList<String>(getLabelsCheckedInManager());
+			final List<String> selectedKeys = new ArrayList<>(getLabelsCheckedInManagerAsList());
 			selectedKeys.removeAll(map.keySet());
 			managerList.setSelectedObjects(selectedKeys.toArray());
 		}
 
 		private Tree getSingleSelectionTree() {
-			if (plottedTrees.size() == 1) return plottedTrees.values().iterator()
-				.next().tree;
+			if (plottedTrees.size() == 1) {
+				final ShapeTree st = plottedTrees.values().iterator().next();
+				if (!(st instanceof MultiTreeShapeTree))
+					return st.tree;
+			}
 			final List<Tree> trees = getSelectedTrees(false);
 			if (trees == null) return null;
 			if (trees.size() != 1) {
@@ -3997,7 +4079,12 @@ public class Viewer3D {
 			final List<Tree> trees = new ArrayList<>();
 			keys.forEach( k -> {
 				final ShapeTree sTree = plottedTrees.get(k);
-				if (sTree != null) trees.add(sTree.tree);
+				if (sTree != null) {
+					if (sTree instanceof MultiTreeShapeTree)
+						trees.addAll(((MultiTreeShapeTree)sTree).trees);
+					else
+						trees.add(sTree.tree);
+				}
 			});
 			return trees;
 		}
@@ -4108,15 +4195,6 @@ public class Viewer3D {
 			});
 			measureMenu.add(mi);
 			GuiUtils.addSeparator(measureMenu, "Specialized Analysis:");
-			mi = new JMenuItem("Brain Area Analysis...", IconFactory.getMenuIcon(GLYPH.BRAIN));
-			mi.addActionListener(e -> {
-				final Tree tree = getSingleSelectionTree();
-				if (tree == null) return;
-				final Map<String, Object> inputs = new HashMap<>();
-				inputs.put("tree", tree);
-				runCmd(BrainAnnotationCmd.class, inputs, CmdWorker.DO_NOTHING, false, true);
-			});
-			measureMenu.add(mi);
 			final JMenuItem convexHullMenuItem = GuiUtils.MenuItems.convexHull();
 			convexHullMenuItem.addActionListener(e -> {
 				final List<Tree> trees = getSelectedTrees();
@@ -4154,6 +4232,15 @@ public class Viewer3D {
 			});
 			measureMenu.add(mi);
 			GuiUtils.addSeparator(measureMenu, "Graph-based Analysis:");
+			mi = GuiUtils.MenuItems.brainAreaAnalysis();
+			mi.addActionListener(e -> {
+				final Tree tree = getSingleSelectionTree();
+				if (tree == null) return;
+				final Map<String, Object> inputs = new HashMap<>();
+				inputs.put("tree", tree);
+				runCmd(BrainAnnotationCmd.class, inputs, CmdWorker.DO_NOTHING, false, true);
+			});
+			measureMenu.add(mi);
 			mi = GuiUtils.MenuItems.createDendrogram();
 			mi.addActionListener(e -> {
 				final Tree tree = getSingleSelectionTreeWithPromptForType();
@@ -4163,7 +4250,7 @@ public class Viewer3D {
 				runCmd(GraphGeneratorCmd.class, inputs, CmdWorker.DO_NOTHING, false, true);
 			});
 			measureMenu.add(mi);
-			mi = new JMenuItem("Create Annotation Graph...", IconFactory.getMenuIcon(GLYPH.BRAIN));
+			mi = GuiUtils.MenuItems.createAnnotionGraph();
 			mi.addActionListener(e -> {
 				final List<Tree> trees = getSelectedTrees();
 				if (trees == null || trees.isEmpty()) return;
@@ -4178,7 +4265,7 @@ public class Viewer3D {
 				runCmd(SaveMeasurementsCmd.class, null, CmdWorker.DO_NOTHING, false, true);
 			});
 			measureMenu.add(mi);
-			measureMenu.add(guiUtils.combineChartsMenuItem());
+			//measureMenu.add(guiUtils.combineChartsMenuItem());
 			return measureMenu;
 		}
 
@@ -4214,7 +4301,7 @@ public class Viewer3D {
 
 					@Override
 					protected void done() {
-						if (cmdModule != null && cmdModule.isCanceled()) {
+						if (cmdModule == null || cmdModule.isCanceled()) {
 							return; // user pressed cancel or chose nothing
 						}
 						final ColorRGBA[] colors = (ColorRGBA[]) cmdModule.getInput("colors");
@@ -4407,6 +4494,28 @@ public class Viewer3D {
 				setTreeThickness(keys, thickness.floatValue(), null);
 			});
 			menu.add(mi);
+			mi = new JMenuItem("Soma radius...", IconFactory.getMenuIcon(GLYPH.CIRCLE));
+			mi.addActionListener(e -> {
+				final List<String> keys = getSelectedTreeLabels();
+				if (keys == null) return;
+				String msg = "<HTML><body><div style='width:500;'>" +
+					"Please specify a constant radius (in physical units  to be applied to somas of selected " + keys.size() + " reconstruction(s).";
+				if (isSNTInstance()) {
+					msg += " This value will only affect how Paths are displayed " +
+						"in the Reconstruction Viewer.";
+				}
+				final Double radius = guiUtils.getDouble(msg, "Soma radius", 10);
+				if (radius == null) {
+					return; // user pressed cancel
+				}
+				if (Double.isNaN(radius) || radius <= 0) {
+					guiUtils.error("Invalid radius.");
+					return;
+				}
+				setSomasDisplayed(keys, true);
+				setSomaRadius(keys, radius.floatValue());
+			});
+			menu.add(mi);
 
 			mi = new JMenuItem("Translate...", IconFactory.getMenuIcon(GLYPH.MOVE));
 			mi.addActionListener(e -> {
@@ -4424,7 +4533,7 @@ public class Viewer3D {
 			GuiUtils.addSeparator(utilsMenu, "Utilities:");
 			JMenuItem mi = new JMenuItem("Annotation Label...", IconFactory.getMenuIcon(GLYPH.PEN));
 			mi.addActionListener(e -> {
-				runCmd(AddTextAnnotationCmd.class, null, CmdWorker.DO_NOTHING, false, false);
+				runCmd(AddTextAnnotationCmd.class, null, CmdWorker.DO_NOTHING, true, false);
 			});
 			utilsMenu.add(mi);
 			utilsMenu.add(legendMenu());
@@ -4475,14 +4584,10 @@ public class Viewer3D {
 		private JPopupMenu scriptingMenu() {
 			final JPopupMenu scriptMenu = new JPopupMenu();
 			GuiUtils.addSeparator(scriptMenu, "New Script:");
-			JMenuItem mi = new JMenuItem(new Action(Action.SCRIPT, KeyEvent.VK_OPEN_BRACKET, false, false));
+			JMenuItem mi = new JMenuItem(new Action(Action.RECORDER, KeyEvent.VK_OPEN_BRACKET, false, false));
 			mi.setIcon(IconFactory.getMenuIcon(GLYPH.CODE));
 			scriptMenu.add(mi);
-			mi = new JMenuItem("Script This Viewer In...", IconFactory.getMenuIcon(GLYPH.CODE));
-			mi.addActionListener(e -> runScriptEditor(null));
-			scriptMenu.add(mi);
-			GuiUtils.addSeparator(scriptMenu, "Record:");
-			final JMenuItem log = new JMenuItem(new Action(Action.LOG, KeyEvent.VK_L, false, false));
+			final JMenuItem log = new JMenuItem(new Action(Action.LOG_TO_RECORDER, KeyEvent.VK_L, false, false));
 			log.setIcon(IconFactory.getMenuIcon(GLYPH.STREAM));
 			scriptMenu.add(log);
 			GuiUtils.addSeparator(scriptMenu, "Resources:");
@@ -4520,35 +4625,6 @@ public class Viewer3D {
 			});
 			prefsMenu.add(mi);
 			return prefsMenu;
-		}
-
-		private void runScriptEditor(String extension) {
-			if (extension == null) {
-				extension = guiUtils.getChoice("Which scripting language?", "Language?",
-						new String[] { ".bsh", ".groovy", ".py" }, prefs.getScriptExtension());
-				if (extension == null) return;
-			}
-			final TextEditor editor = new TextEditor(context);
-			final boolean needsSemiColon = extension.endsWith("bsh");
-			final String commentPrefix = (extension.endsWith("py")) ? "# " : "// ";
-			final StringBuilder sb = new StringBuilder(prefs.getBoilerplateScript(extension));
-			sb.append("\n").append(commentPrefix);
-			sb.append("Rec. Viewer's API: https://javadoc.scijava.org/SNT/index.html?sc/fiji/snt/viewer/Viewer3D.html");
-			sb.append("\n").append(commentPrefix);
-			sb.append("Tip: Programmatic control of the Viewer's scene can be set using the Console info");
-			sb.append("\n").append(commentPrefix);
-			sb.append("produced when calling viewer.logSceneControls() or pressing 'L' when viewer is frontmost");
-			sb.append("\n");
-			sb.append("\n").append("viewer = snt.getRecViewer(");
-			if (!isSNTInstance()) sb.append(getID());
-			sb.append(")");
-			if (needsSemiColon) sb.append(";");
-			sb.append("\n");
-			editor.createNewDocument("RecViewerScript" + extension, sb.toString());
-			//HACK: Reset the filename because createNewDocument() currently appends multiple extensions
-			editor.setEditorPaneFileName("RecViewerScript" + extension);
-			//editor.newTab(sb.toString(), extension);
-			editor.setVisible(true);
 		}
 
 		private JMenu panMenu() {
@@ -4813,7 +4889,7 @@ public class Viewer3D {
 
 					@Override
 					protected void done() {
-						if (cmdModule != null && cmdModule.isCanceled()) {
+						if (cmdModule == null || cmdModule.isCanceled()) {
 							return; // user pressed cancel or chose nothing
 						}
 						@SuppressWarnings("unchecked")
@@ -4977,7 +5053,7 @@ public class Viewer3D {
 				guiUtils.error("Remote server not reached. It is either down or you have no internet access.");
 				return;
 			}
-			if (warnIfLoaded && getOBJs().keySet().contains(label)) {
+			if (warnIfLoaded && getOBJs().containsKey(label)) {
 				guiUtils.error(label + " is already loaded.");
 				return;
 			}
@@ -5030,6 +5106,7 @@ public class Viewer3D {
 					.execute();
 			});
 		}
+
 	}
 
 	private class FileDropWorker {
@@ -5159,7 +5236,7 @@ public class Viewer3D {
 				try {
 					incrementProgress();
 					final ColorRGB color = colors[idx];
-					if (fName.endsWith("swc") || fName.endsWith(".traces") || fName.endsWith(".json")) { // reconstruction:
+					if(SNTUtils.isReconstructionFile(file)) {
 						try {
 							final Collection<Tree> treesInFile = Tree.listFromFile(file.getAbsolutePath());
 							if (treesInFile.isEmpty()) {
@@ -5203,7 +5280,7 @@ public class Viewer3D {
 			return new int[] { failures, (idx-failures) };
 		}
 
-		private ColorRGB[] getmportColors(ColorRGB baseColor, final int n) {
+		private ColorRGB[] getmportColors(final ColorRGB baseColor, final int n) {
 			if (baseColor == null) {
 				return SNTColor.getDistinctColors(n);
 			} else {
@@ -5324,7 +5401,7 @@ public class Viewer3D {
 					viewUpdatesEnabled = compartments.size() == 1;
 					for (final AllenCompartment compartment : compartments) {
 						Viewer3D.this.incrementProgress();
-						if (getOBJs().keySet().contains(compartment.name())) {
+						if (getOBJs().containsKey(compartment.name())) {
 							managerList.addCheckBoxListSelectedValue(compartment.name(), true);
 						} else {
 							try {
@@ -5352,7 +5429,7 @@ public class Viewer3D {
 						get();
 						if (loadedCompartments > 0)
 							Viewer3D.this.validate();
-						if (failedCompartments.size() > 0) {
+						if (!failedCompartments.isEmpty()) {
 							final StringBuilder sb = new StringBuilder(String.valueOf(loadedCompartments)).append("/")
 									.append(loadedCompartments + failedCompartments.size())
 									.append(" meshes retrieved. The following compartments failed to load:")
@@ -5376,7 +5453,7 @@ public class Viewer3D {
 		private void showSelectionInfo() {
 			final List<AllenCompartment> cs = getCheckedSelection();
 			if (cs == null) return;
-			Collections.sort(cs, (c1, c2) -> {
+			cs.sort((c1, c2) -> {
 				return c1.name().compareToIgnoreCase(c2.name());
 			});
 			final StringBuilder sb = new StringBuilder("<header>");
@@ -5409,7 +5486,6 @@ public class Viewer3D {
 			frame.allenNavigator = this;
 			guiUtils = new GuiUtils(dialog);
 			searchableBar.setGuiUtils(guiUtils);
-			dialog.setLocationRelativeTo(frame);
 			dialog.setDefaultCloseOperation(WindowConstants.DO_NOTHING_ON_CLOSE);
 			dialog.addWindowListener(new WindowAdapter() {
 
@@ -5424,6 +5500,7 @@ public class Viewer3D {
 			dialog.pack();
 			GuiUtils.expandAllTreeNodes(tree);
 			cmdFinder.attach(dialog);
+			dialog.setLocationRelativeTo(frame);
 			dialog.setVisible(true);
 			return dialog;
 		}
@@ -5556,29 +5633,6 @@ public class Viewer3D {
 			});
 		}
 
-		public List<String> getCheckBoxListSelectedValues(final ListSelectionEvent e) {
-			final CheckBoxListSelectionModel listSelectionModel = getCheckBoxListSelectionModel();
-			final int iMin = e.getFirstIndex();
-			final int iMax = e.getLastIndex();
-			final List<String> result = new ArrayList<>();
-			if ((iMin < listSelectionModel.getMinSelectionIndex())
-					|| (iMax < listSelectionModel.getMaxSelectionIndex())) {
-				return result;
-			}
-			for (int i = iMin; i <= iMax; i++) {
-				if (i == listSelectionModel.getAllEntryIndex() && listSelectionModel.isAllEntryConsidered()) {
-					continue;
-				}
-				if (i > listSelectionModel.getModel().getSize() - 1) {
-					break; // somehow this happens when getAllEntryIndex() detection fails!?
-				}
-				if (listSelectionModel.isSelectedIndex(i)) {
-					result.add(getModel().getElementAt(i).toString());
-				}
-			}
-			return result;
-		}
-
 		@Override
 		protected Handler createHandler() {
 			return new HandlerPlus(this);
@@ -5706,13 +5760,11 @@ public class Viewer3D {
 					label.setIcon(null);
 				}
 				final String[] tags = TagUtils.getTagsFromEntry(labelText);
-				if (tags.length > 0) {
-					for (final String tag : tags) {
-						final ColorRGB c = ColorRGB.fromHTMLColor(tag);
-						if (c != null) {
-							label.setForeground(new java.awt.Color(c.getRed(), c.getGreen(), c.getBlue()));
-							break;
-						}
+				for (final String tag : tags) {
+					final ColorRGB c = ColorRGB.fromHTMLColor(tag);
+					if (c != null) {
+						label.setForeground(new java.awt.Color(c.getRed(), c.getGreen(), c.getBlue()));
+						break;
 					}
 				}
 				return label;
@@ -5870,6 +5922,21 @@ public class Viewer3D {
 			displayMsg("Controls are not available for this viewer");
 	}
 
+	private class MultiTreeShapeTree extends ShapeTree {
+
+		Collection<Tree> trees;
+
+		public MultiTreeShapeTree(final Tree unused) {
+			super(unused);
+		}
+
+		public MultiTreeShapeTree(final Collection<Tree> trees) {
+			super(new Tree());
+			this.trees = trees;
+			trees.forEach(t -> tree.list().addAll(t.list()));
+		}
+	}
+
 	private class ShapeTree extends Shape {
 
 		private static final float SOMA_SCALING_FACTOR = 2.5f;
@@ -5878,7 +5945,7 @@ public class Viewer3D {
 		private static final int AXON = Path.SWC_AXON;
 		private static final int ANY = -1;
 
-		private final Tree tree;
+		protected final Tree tree;
 		private Shape treeSubShape;
 		private Wireframeable somaSubShape;
 		private Coord3d translationReset;
@@ -6033,6 +6100,7 @@ public class Viewer3D {
 				2, (bottom.z + top.z) / 2));
 			final float height = (float) bottom.distanceTo(top);
 			tube.setVolume((float) bottom.radius, (float) top.radius, height);
+			tube.setColor(color);
 			return tube;
 		}
 
@@ -6116,7 +6184,7 @@ public class Viewer3D {
 
 	}
 
-	private class LineStripPlus extends LineStrip {
+	private static class LineStripPlus extends LineStrip {
 		final int type;
 
 		LineStripPlus(final int size, final int type) {
@@ -6300,7 +6368,7 @@ public class Viewer3D {
 			final BoundingBox3d viewBounds = view.getBounds();
 			final Coord3d offset = to.sub(from).div(-panStep);
 			final BoundingBox3d newBounds = viewBounds.shift(offset);
-			view.setBoundManual(newBounds);
+			view.setBoundsManual(newBounds);
 			view.shoot();
 			fireControllerEvent(ControllerType.PAN, offset);
 		}
@@ -6311,7 +6379,7 @@ public class Viewer3D {
 				factor));
 			newBounds = newBounds.shift((viewBounds.getCenter().sub(newBounds
 				.getCenter())));
-			view.setBoundManual(newBounds);
+			view.setBoundsManual(newBounds);
 			view.shoot();
 			fireControllerEvent(ControllerType.ZOOM, factor);
 		}
@@ -6392,7 +6460,7 @@ public class Viewer3D {
 		}
 	}
 
-	private class CameraThreadControllerPlus extends CameraThreadController {
+	private static class CameraThreadControllerPlus extends CameraThreadController {
 
 		//TODO: here we should be bale to override #move and #doRun to improve
 		// rotations, namely along anatomical axes rather than azymuths
@@ -6457,7 +6525,7 @@ public class Viewer3D {
 					break;
 				case 'l':
 				case 'L':
-					logSceneControls();
+					logSceneControls(true);
 					break;
 				case 'r':
 				case 'R':
@@ -6543,7 +6611,7 @@ public class Viewer3D {
 			final Coord3d offset = new Coord3d(
 					bounds.getXRange().getRange() * direction.x * normPan, 
 					bounds.getYRange().getRange() * direction.y * normPan, 0);
-			view.setBoundManual(bounds.shift(offset));
+			view.setBoundsManual(bounds.shift(offset));
 			view.shoot();
 		}
 
@@ -6754,6 +6822,10 @@ public class Viewer3D {
 			sb.append("    <td>Toggle <u>S</u>tatus Bar</td>");
 			sb.append("    <td>Shift+S</td>");
 			sb.append("  </tr>");
+			sb.append("  <tr>");
+			sb.append("    <td>Command <u>P</u>alette </td>");
+			sb.append("    <td>").append(GuiUtils.ctrlKey()).append("+Shift+P</td>");
+			sb.append("  </tr>");
 			if (showInDialog) {
 				sb.append("  <tr>");
 				sb.append("  <tr>");
@@ -6825,7 +6897,7 @@ public class Viewer3D {
 			if (SNTUtils.isDebugMode()) {
 				g2d.setColor(toAWTColor(view.getAxisLayout().getMainColor()));
 				g2d.setFont(g2d.getFont().deriveFont((float)view.getAxisLayout().getFont().getHeight()));
-				int lineHeight = g.getFontMetrics().getHeight();
+				final int lineHeight = g.getFontMetrics().getHeight();
 				int lineNo = 1;
 				g2d.drawString("Camera: " + view.getCamera().getEye(), 20, lineHeight * lineNo++);
 				g2d.drawString("FOV: " + view.getCamera().getRenderingSphereRadius(), 20, lineHeight * lineNo++);
@@ -7084,7 +7156,8 @@ public class Viewer3D {
 	/**
 	 * Applies a constant thickness (line width) to a subset of rendered trees.
 	 *
-	 * @param labels      the Collection of keys specifying the subset of trees
+	 * @param labels      the Collection of keys specifying the subset of trees. If
+	 *                    null, thickness is applied to all the trees in the viewer.
 	 * @param thickness   the thickness (line width)
 	 * @param compartment a string with at least 2 characters describing the Tree
 	 *                    compartment (e.g., 'axon', 'axn', 'dendrite', 'dend',
@@ -7096,7 +7169,7 @@ public class Viewer3D {
 	{
 		final int comp = getSubTreeCompartment(compartment);
 		plottedTrees.forEach((k, shapeTree) -> {
-			if (labels.contains(k)) shapeTree.setThickness(thickness, comp);
+			if (labels == null || labels.contains(k)) shapeTree.setThickness(thickness, comp);
 		});
 	}
 
@@ -7126,6 +7199,28 @@ public class Viewer3D {
 		final int comp = getSubTreeCompartment(compartment);
 		plottedTrees.values().forEach(shapeTree -> shapeTree.setThickness(
 				thickness, comp));
+	}
+
+	/**
+	 * Applies a constant radius to all rendered somas being rendered as spheres.
+	 *
+	 * @param radius the radius (physical units)
+	 */
+	public void setSomaRadius(final float radius) {
+		plottedTrees.values().forEach(shapeTree -> shapeTree.setSomaRadius(radius));
+	}
+
+	/**
+	 * Applies a constant radius to the somas of a subset of rendered trees.
+	 *
+	 * @param labels the Collection of keys specifying the subset of trees.
+	 * @param radius the radius (physical units)
+	 * @see #setSomaRadius(float)
+	 */
+	public void setSomaRadius(final Collection<String> labels, final float radius) {
+		plottedTrees.forEach((k, shapeTree) -> {
+			if (labels.contains(k)) shapeTree.setSomaRadius(radius);
+		});
 	}
 
 	/**
@@ -7279,10 +7374,12 @@ public class Viewer3D {
 	}
 
 	private boolean treesContainColoredNodes(final List<String> labels) {
+		if (plottedTrees == null || plottedTrees.isEmpty()) return false;
 		Color refColor = null;
 		for (final Map.Entry<String, ShapeTree> entry : plottedTrees.entrySet()) {
 			if (labels.contains(entry.getKey())) {
 				final Shape shape = entry.getValue().treeSubShape;
+				if (shape == null) continue; // e.g., soma-only tree
 				for (int i = 0; i < shape.size(); i++) {
 					// treeSubShape is only composed of LineStripPluses so this is a safe
 					// casting
@@ -7334,7 +7431,7 @@ public class Viewer3D {
 	}
 
 	@Override
-	public boolean equals(Object obj) {
+	public boolean equals(final Object obj) {
 		if (this == obj)
 			return true;
 		if (obj == null)
@@ -7426,7 +7523,7 @@ public class Viewer3D {
 				super.get2DLayout().setVerticalAxisFlip(true); // for backwards compatibility
 			}
 
-			void setHiDPIenabled(boolean enabled) {
+			void setHiDPIenabled(final boolean enabled) {
 				super.hidpi = (enabled) ? HiDPI.ON : HiDPI.OFF;
 				if (enabled)
 					axis.getLayout().setFontSizePolicy(new HiDPITwoFontSizesPolicy(this));
@@ -7434,7 +7531,7 @@ public class Viewer3D {
 			}
 			
 			@Override
-			public void setViewPoint(Coord3d polar, boolean updateView) {
+			public void setViewPoint(final Coord3d polar, final boolean updateView) {
 				// see https://github.com/jzy3d/jzy3d-api/issues/214#issuecomment-975717207
 				viewpoint = polar;
 				if (updateView)
@@ -7457,7 +7554,7 @@ public class Viewer3D {
 			(float) bounds[1], new Font("Arial", Font.PLAIN, 24), 3, 4);
 		jzy3D.add(tree);
 		final OBJMesh brainMesh = jzy3D.loadRefBrain("Allen CCF");
-		OBJMesh mesh = AllenUtils.getCompartment("Thalamus").getMesh();
+		final OBJMesh mesh = AllenUtils.getCompartment("Thalamus").getMesh();
 		if (mesh != null) { // server is online and reachable
 			jzy3D.addMesh(mesh);
 			SNTPoint centroid = mesh.getCentroid("l");
@@ -7481,13 +7578,13 @@ public class Viewer3D {
 		final Annotation3D annotation1 = jzy3D.annotateLine(selectedTips, "dummy");
 		annotation1.setColor("orange");
 		annotation1.setSize(10);
-		Annotation3D annotation2 = jzy3D.annotatePoints(analyzer.getTips(), "tips");
+		final Annotation3D annotation2 = jzy3D.annotatePoints(analyzer.getTips(), "tips");
 		annotation2.setColor("green");
 		annotation2.setSize(20);
-		ArrayList<Annotation3D> list = new ArrayList<>();
+		final ArrayList<Annotation3D> list = new ArrayList<>();
 		list.add(annotation1);
 		list.add(annotation2);
-		Annotation3D a = jzy3D.mergeAnnotations(list, "");
+		final Annotation3D a = jzy3D.mergeAnnotations(list, "");
 		a.setSize(4);
 		a.setColor("pink");
 		brainMesh.translate(new PointInImage(800, 0, 0));
@@ -7495,9 +7592,9 @@ public class Viewer3D {
 			jzy3D.view.shoot();
 			jzy3D.fitToVisibleObjects(true, false);
 		}
-		MouseLightLoader loader = new MouseLightLoader("AA1044");
-		Tree aa1044 = loader.getTree("axon");
-		Annotation3D hull = jzy3D.annotateSurface(new TreeAnalyzer(aa1044).getTips(), "Convex Hull", true);
+		final MouseLightLoader loader = new MouseLightLoader("AA1044");
+		final Tree aa1044 = loader.getTree("axon");
+		final Annotation3D hull = jzy3D.annotateSurface(new TreeAnalyzer(aa1044).getTips(), "Convex Hull", true);
 		System.out.println("AA1044: Convex hull volume = " + hull.getVolume());
 		jzy3D.addTree(aa1044);
 		jzy3D.show();
@@ -7505,7 +7602,7 @@ public class Viewer3D {
 		jzy3D.setViewPoint(-1.5707964f, -1.5707964f);
 		jzy3D.updateColorBarLegend(-8, 88);
 		jzy3D.setEnableDarkMode(false);
-		brainMesh.translate(new PointInImage(800, 0, 0));
+		//brainMesh.translate(new PointInImage(800, 0, 0));
 	}
 
 }

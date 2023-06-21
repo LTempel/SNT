@@ -2,7 +2,7 @@
  * #%L
  * Fiji distribution of ImageJ for the life sciences.
  * %%
- * Copyright (C) 2010 - 2022 Fiji developers.
+ * Copyright (C) 2010 - 2023 Fiji developers.
  * %%
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as
@@ -57,7 +57,7 @@ import sc.fiji.snt.util.PointInCanvas;
  *
  * @author Tiago Ferreira
  */
-@Plugin(type = Command.class, visible = false, label = "Extract Spine/Varicosity Counts from ROI(s)...", initializer = "init")
+@Plugin(type = Command.class, label = "Extract Spine/Varicosity Counts from ROI(s)...", initializer = "init")
 public class SpineExtractorCmd extends CommonDynamicCmd {
 	
 	private static final String MSG = "<br>To initiate counts, right-click on image and run \"Count Spine/Varicosities...\"";

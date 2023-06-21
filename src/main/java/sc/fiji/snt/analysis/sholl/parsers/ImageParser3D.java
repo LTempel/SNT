@@ -2,7 +2,7 @@
  * #%L
  * Fiji distribution of ImageJ for the life sciences.
  * %%
- * Copyright (C) 2010 - 2022 Fiji developers.
+ * Copyright (C) 2010 - 2023 Fiji developers.
  * %%
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as
@@ -23,7 +23,6 @@ package sc.fiji.snt.analysis.sholl.parsers;
 
 import java.util.ArrayList;
 import java.util.HashSet;
-import java.util.Iterator;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import org.scijava.Context;
@@ -31,9 +30,9 @@ import org.scijava.thread.ThreadService;
 
 import ij.ImagePlus;
 import ij.ImageStack;
-import ij.Prefs;
 import ij.plugin.ChannelSplitter;
 import ij.util.ThreadUtil;
+import sc.fiji.snt.SNTPrefs;
 import sc.fiji.snt.SNTUtils;
 import sc.fiji.snt.analysis.sholl.ProfileEntry;
 import sc.fiji.snt.util.ShollPoint;
@@ -51,7 +50,6 @@ public class ImageParser3D extends ImageParser {
 	private ImageStack stack;
 	private final int nCPUs;
 	private final ThreadService threadService;
-	private final AtomicInteger ai;
 	private int nSamples;
 
 	@Deprecated
@@ -64,8 +62,7 @@ public class ImageParser3D extends ImageParser {
 		skipSingleVoxels = true;
 		setPosition(imp.getC(), imp.getT());
 		threadService = context.getService(ThreadService.class);
-		ai = new AtomicInteger(0);
-		nCPUs = Prefs.getThreads();
+		nCPUs = SNTPrefs.getThreads();
 	}
 
 	@Override
@@ -110,7 +107,7 @@ public class ImageParser3D extends ImageParser {
 
 		@Override
 		public void run() {
-
+			final AtomicInteger ai = new AtomicInteger(0);
 			for (int k = ai.getAndIncrement(); k < nCPUs; k = ai.getAndIncrement()) {
 				for (int s = start; s < end; s++) {
 
@@ -192,12 +189,7 @@ public class ImageParser3D extends ImageParser {
 			}
 		}
 
-		final Iterator<ShollPoint> it = points.iterator();
-		while (it.hasNext()) {
-			if (it.next().flag == ShollPoint.DELETE) {
-				it.remove();
-			}
-		}
+		points.removeIf(shollPoint -> shollPoint.flag == ShollPoint.DELETE);
 
 		return new HashSet<>(points);
 

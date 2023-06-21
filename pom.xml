@@ -11,7 +11,7 @@
 
 	<groupId>org.morphonets</groupId>
 	<artifactId>SNT</artifactId>
-	<version>4.1.12-SNAPSHOT</version>
+	<version>4.1.21-SNAPSHOT</version>
 
 	<name>SNT</name>
 	<description>The ImageJ framework for quantitative neuroanatomy</description>
@@ -111,7 +111,7 @@
 	<scm>
 		<connection>scm:git:https://github.com/morphonets/SNT</connection>
 		<developerConnection>scm:git:git@github.com:morphonets/SNT</developerConnection>
-		<tag>HEAD</tag>
+		<tag>SNT-4.1.17</tag>
 		<url>https://github.com/morphonets/SNT</url>
 	</scm>
 	<issueManagement>
@@ -131,17 +131,18 @@
 		<doclint>none</doclint>
 
 		<!-- Dependency versions -->
-		<sciview.version>60df123</sciview.version>
-		<scenery.version>0a32128</scenery.version>
-		<kotlin.version>1.7.20</kotlin.version>
+		<sciview.version>6b4e41a</sciview.version>
+		<scenery.version>0.9.0</scenery.version>
+		<kotlin.version>1.8.22</kotlin.version>
 		<kotlin.compiler.jvmTarget>11</kotlin.compiler.jvmTarget>
-		<jzy3d.version>2.2.0</jzy3d.version>
+		<jzy3d.version>2.2.1</jzy3d.version>
 		<jgl.version>2.0.0</jgl.version>
-		<okhttp.version>4.9.3</okhttp.version>
-		<font-awesome.version>6.2.0</font-awesome.version>
-		<json.version>20220924</json.version>
-		<flatlaf.version>2.6</flatlaf.version>
-		<log4j.version>2.19.0</log4j.version>
+		<okhttp.version>4.11.0</okhttp.version>
+		<okio-jvm.version>3.3.0</okio-jvm.version>
+		<font-awesome.version>6.4.0</font-awesome.version>
+		<json.version>20230618</json.version>
+		<flatlaf.version>3.1.1</flatlaf.version>
+		<log4j.version>2.20.0</log4j.version>
 
 		<!-- NB: Deploy releases to the SciJava Maven repository. -->
 		<releaseProfiles>sign,deploy-to-scijava</releaseProfiles>
@@ -158,6 +159,10 @@
 		<repository>
 			<id>jitpack.io</id>
             <url>https://jitpack.io/</url>
+		</repository>
+		<repository>
+			<id>scenery 0.9.0 staging repository</id>
+			<url>https://oss.sonatype.org/content/repositories/graphicsscenery-1223</url>
 		</repository>
 	</repositories>
 
@@ -259,7 +264,7 @@
 		<dependency>
 			<groupId>com.github.haifengl</groupId>
 			<artifactId>smile-core</artifactId>
-			<version>2.6.0</version>
+			<version>3.0.2</version>
 		</dependency>
 		<dependency>
 			<groupId>sc.fiji</groupId>
@@ -276,6 +281,7 @@
 		<dependency>
 			<groupId>org.jfree</groupId>
 			<artifactId>jfreechart</artifactId>
+			<version>1.5.4</version>
 		</dependency>
 		<dependency>
 			<groupId>sc.iview</groupId>
@@ -392,6 +398,11 @@
 			<version>${okhttp.version}</version>
 		</dependency>
 		<dependency>
+			<groupId>com.squareup.okio</groupId>
+			<artifactId>okio-jvm</artifactId>
+			<version>${okio-jvm.version}</version>
+		</dependency>
+		<dependency>
 			<groupId>org.json</groupId>
 			<artifactId>json</artifactId>
 			<version>${json.version}</version>
@@ -428,7 +439,7 @@
 		<dependency>
 			<groupId>it.unimi.dsi</groupId>
 			<artifactId>fastutil-core</artifactId>
-			<version>8.5.9</version>
+			<version>8.5.12</version>
 		</dependency>
 		<dependency>
 			<groupId>org.jheaps</groupId>

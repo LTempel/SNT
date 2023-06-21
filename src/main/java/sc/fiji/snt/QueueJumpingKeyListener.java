@@ -2,7 +2,7 @@
  * #%L
  * Fiji distribution of ImageJ for the life sciences.
  * %%
- * Copyright (C) 2010 - 2022 Fiji developers.
+ * Copyright (C) 2010 - 2023 Fiji developers.
  * %%
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as
@@ -129,7 +129,12 @@ class QueueJumpingKeyListener implements KeyListener {
 			return;
 		}
 		else if (ctrl_down && shift_down && keyCode == KeyEvent.VK_P && tracerPlugin.getUI() != null) {
-			tracerPlugin.getUI().runCommand("cmdPalette");
+			tracerPlugin.getUI().runCustomCommand("cmdPalette");
+			e.consume();
+			return;
+		}
+		else if (ctrl_down && keyCode == KeyEvent.VK_S && tracerPlugin.getUI() != null) {
+			tracerPlugin.getUI().saveToXML(shift_down);
 			e.consume();
 			return;
 		}

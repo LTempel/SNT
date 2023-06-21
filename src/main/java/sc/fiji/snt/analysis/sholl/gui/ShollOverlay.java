@@ -2,7 +2,7 @@
  * #%L
  * Fiji distribution of ImageJ for the life sciences.
  * %%
- * Copyright (C) 2010 - 2022 Fiji developers.
+ * Copyright (C) 2010 - 2023 Fiji developers.
  * %%
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as
@@ -252,9 +252,8 @@ public class ShollOverlay implements ProfileProperties {
 		final boolean east = arcs && sProperty.contains(HEMI_EAST);
 
 		for (final ProfileEntry entry : profile.entries()) {
-			final double radiusX = cal.getRawX(entry.radius);
-			final double radiusY = cal.getRawY(entry.radius);
-
+			final double radiusX = entry.radius / cal.pixelWidth;
+			final double radiusY = entry.radius / cal.pixelHeight;
 			Roi shell;
 			if (arcs) {
 				final Arc2D.Double arc = new Arc2D.Double();
@@ -293,7 +292,7 @@ public class ShollOverlay implements ProfileProperties {
 		cRoi.setStrokeColor(baseColor);
 		cRoi.setProperty(TYPE, CENTER);
 		setROIposition(cRoi, channel, centerRawZ, frame, hyperStack);
-		overlay.add(cRoi, "center");
+		overlay.add(cRoi, CENTER);
 	}
 
 	private void setROIposition(final Roi roi, final int c, final double z, final int t, final boolean hyperStack) {
@@ -401,8 +400,7 @@ public class ShollOverlay implements ProfileProperties {
 			throw new IllegalArgumentException(
 					"Specified LUT could not be found: " + lutName + ". Use getLUTs() for available options");
 		}
-		final ColorTable ct = ls.loadLUT(map.get(lutName));
-		return ct;
+		return ls.loadLUT(map.get(lutName));
 	}
 
 	public void setShellsThickness(final int strokeWidth) {
