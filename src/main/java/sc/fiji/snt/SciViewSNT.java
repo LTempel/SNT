@@ -76,7 +76,7 @@ public class SciViewSNT {
 
 	@Parameter
 	private SciViewService sciViewService;
-	private SNT snt;
+	public SNT snt;
 	private SciView sciView;
 
 	private final Map<String, ShapeTree> plottedTrees;
@@ -455,8 +455,8 @@ public class SciViewSNT {
 				final Vector3f p3 = convertPIIToVector3(somaPoints.get(2));
 				final double lengthT1 = p2.sub(p1).length();
 				final double lengthT2 = p1.sub(p3).length();
-				final Node t1 = sciView.addCylinder(p2,DEF_NODE_RADIUS,(float)lengthT1,20, p -> { return null; });
-				final Node t2 = sciView.addCylinder(p1,DEF_NODE_RADIUS,(float)lengthT2,20, p -> { return null; });
+				final Node t1 = sciView.addCylinder(p2,DEF_NODE_RADIUS,(float)lengthT1, ColorRGB.fromHTMLColor("white"), 20, p -> { return null; });
+				final Node t2 = sciView.addCylinder(p1,DEF_NODE_RADIUS,(float)lengthT2, ColorRGB.fromHTMLColor("white"), 20, p -> { return null; });
 				addChild(t1);
 				addChild(t2);
 				return;
@@ -514,7 +514,12 @@ public class SciViewSNT {
 		final SciViewSNT sciViewSNT = sntService.getOrCreateSciViewSNT();
 
 		sciViewSNT.sciView.waitForSceneInitialisation();
-		sciViewSNT.setupControllerTracing();
+		try {
+			sciViewSNT.setupControllerTracing();
+		}
+		catch(Exception e){
+			e.printStackTrace();
+		}
 
 		final Tree tree = sntService.demoTree("fractal");
 		tree.setColor(Colors.RED);

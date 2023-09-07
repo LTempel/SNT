@@ -301,9 +301,10 @@ public class CircleCursor3D< T > implements Cursor< T >
     }
 
     @Override
-    public Sampler< T > copy()
+    public Cursor< T > copy()
     {
-        return ra.copy();
+        // FIXME
+        return null;
     }
 
 }

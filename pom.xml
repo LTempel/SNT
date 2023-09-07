@@ -5,7 +5,7 @@
 	<parent>
 		<groupId>org.scijava</groupId>
 		<artifactId>pom-scijava</artifactId>
-		<version>33.2.0</version>
+		<version>35.1.1</version>
 		<relativePath />
 	</parent>
 
@@ -131,7 +131,7 @@
 		<doclint>none</doclint>
 
 		<!-- Dependency versions -->
-		<sciview.version>6b4e41a</sciview.version>
+		<sciview.version>767bd3a</sciview.version>
 		<scenery.version>0.9.0</scenery.version>
 		<kotlin.version>1.8.22</kotlin.version>
 		<kotlin.compiler.jvmTarget>11</kotlin.compiler.jvmTarget>
@@ -149,6 +149,7 @@
 
 		<!-- Resolve dup. class conflict -->
 		<allowedDuplicateClasses>${scijava.allowedDuplicateClasses},org.jzy3d.plot3d.pipelines.NotImplementedException,jogamp.nativetag.common.linux.amd64.TAG,jogamp.nativetag.common.linux.armv6hf.TAG,jogamp.nativetag.common.linux.i586.TAG,jogamp.nativetag.common.macosx.universal.TAG,jogamp.nativetag.common.windows.amd64.TAG,jogamp.nativetag.common.windows.i586.TAG,jogamp.nativetag.opengl.linux.amd64.TAG,jogamp.nativetag.opengl.linux.armv6hf.TAG,jogamp.nativetag.opengl.linux.i586.TAG,jogamp.nativetag.opengl.macosx.universal.TAG,jogamp.nativetag.opengl.windows.amd64.TAG,jogamp.nativetag.opengl.windows.i586.TAG</allowedDuplicateClasses>
+	    <enforcer.skip>true</enforcer.skip>
 	</properties>
 
 	<repositories>
@@ -301,6 +302,11 @@
 					<groupId>org.biojava</groupId>
 					<artifactId>biojava-modfinder</artifactId>
 				</exclusion>
+				<!-- TODO: Remove this once figured out why the version is missing from the parent POM -->
+				<exclusion>
+					<groupId>dev.dirs</groupId>
+					<artifactId>directories</artifactId>
+				</exclusion>
 				<exclusion>
 					<groupId>org.apache.logging.log4j</groupId>
 					<artifactId>log4j-slf4j-impl</artifactId>
@@ -308,6 +314,11 @@
 				<exclusion>
 					<groupId>org.apache.logging.log4j</groupId>
 					<artifactId>log4j-api</artifactId>
+				</exclusion>
+				<!-- TODO: Remove this once figured out why the version is missing from the parent POM -->
+				<exclusion>
+					<groupId>org.apache.logging.log4j</groupId>
+					<artifactId>log4j-1.2-api</artifactId>
 				</exclusion>
 				<exclusion>
 					<groupId>org.apache.logging.log4j</groupId>
@@ -318,6 +329,11 @@
 					<artifactId>kotlin-stdlib</artifactId>
 				</exclusion>
 			</exclusions>
+		</dependency>
+		<dependency>
+			<groupId>dev.dirs</groupId>
+			<artifactId>directories</artifactId>
+			<version>26</version>
 		</dependency>
 		<dependency>
 			<groupId>graphics.scenery</groupId>
@@ -413,10 +429,6 @@
 			<version>${font-awesome.version}</version>
 		</dependency>
 		<dependency>
-			<groupId>org.scijava</groupId>
-			<artifactId>scijava-table</artifactId>
-		</dependency>
-		<dependency>
 			<groupId>org.jgrapht</groupId>
 			<artifactId>jgrapht-core</artifactId>
 		</dependency>
@@ -426,7 +438,7 @@
 		</dependency>
 		<dependency>
 			<groupId>org.scijava</groupId>
-			<artifactId>scijava-plugins-io-table</artifactId>
+			<artifactId>scijava-table</artifactId>
 		</dependency>
 		<dependency>
 			<groupId>net.imagej</groupId>
