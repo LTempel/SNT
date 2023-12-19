@@ -226,6 +226,13 @@ public class SciViewSNT {
 		//sciView.centerOnNode(plottedTrees.get(label));
 	}
 
+	public ShapeTree addTree(final Tree tree, final Node parent) {
+		initSciView();
+		final String label = getUniqueLabel(plottedTrees, "Tree ", tree.getLabel());
+		return add(tree, label, parent);
+		//sciView.centerOnNode(plottedTrees.get(label));
+	}
+
 		public void loadData(){
 
 		final Volume volume = sciView.addVolume((RandomAccessibleInterval) snt.getLoadedData());
@@ -260,10 +267,21 @@ public class SciViewSNT {
 	}
 
 	private ShapeTree add(final Tree tree, final String label) {
+		return add(tree, label, null);
+	}
+
+	private ShapeTree add(final Tree tree, final String label, final Node parent) {
 		final ShapeTree shapeTree = new ShapeTree(tree);
 		shapeTree.setName(label);
 		plottedTrees.put(label, shapeTree);
-		sciView.addNode(shapeTree.get(), true);
+		if(parent != null) {
+			sciView.addNode(shapeTree.get(), true, (Node n) -> {
+				return null;
+			}, parent);
+		} else {
+			sciView.addNode(shapeTree.get(), true);
+		}
+
 //		for( Node node : shapeTree.get().getChildren() ) {
 //			sciView.addChild(node);
 //			//System.out.println("addTree: node " + node.getMetadata().get("pathID") + " node " + n);
@@ -511,6 +529,7 @@ public class SciViewSNT {
 
 		ij.ui().showUI();
 		final SNTService sntService = ij.context().getService(SNTService.class);
+		sntService.initialize(true);
 		final SciViewSNT sciViewSNT = sntService.getOrCreateSciViewSNT();
 
 		sciViewSNT.sciView.waitForSceneInitialisation();
